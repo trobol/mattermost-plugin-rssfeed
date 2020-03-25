@@ -12,6 +12,9 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"strings"
+	"crypto/md5"
+	"fmt"
 )
 
 //const RSSFEED_ICON_URL = "./plugins/rssfeed/assets/rss.png"
@@ -140,11 +143,15 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription) err
 	items := rssv2parser.CompareItemsBetweenOldAndNew(oldRssFeed, newRssFeed)
 
 	for _, item := range items {
-		post := newRssFeed.Channel.Title + "\n" + item.Title + "\n" + item.Link + "\n"
-		if config.ShowDescription {
-			post = post + html2md.Convert(item.Description) + "\n"
+		attachment := &model.SlackAttachment{
+			Title: item.Title,
+			TitleLink: item.Link,
 		}
-		p.createBotPost(subscription.ChannelID, post, "custom_git_pr")
+
+		if config.ShowDescription {
+			attachment.Text = html2md.Convert(item.Description)
+		}
+		p.createBotPost(subscription.ChannelID, attachment, "custom_git_pr")
 	}
 
 	if len(items) > 0 {
@@ -171,26 +178,43 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 	items := atomparser.CompareItemsBetweenOldAndNew(oldFeed, newFeed)
 
 	for _, item := range items {
-		post := newFeed.Title + "\n" + item.Title + "\n"
+
+		attachment := &model.SlackAttachment{
+			Title: item.Title,
+	
+			AuthorName: item.Author.Name,
+			AuthorLink: item.Author.URI,
+			AuthorIcon: getGravatarIcon(item.Author.Email),
+			
+		}
 
 		for _, link := range item.Link {
 			if link.Rel == "alternate" {
-				post = post + link.Href + "\n"
+				attachment.TitleLink = link.Href
 			}
 		}
+
+		if item.Published != "" {
+			attachment.Timestamp = string(item.Published)
+		} else {
+			attachment.Timestamp = string(item.Updated)
+		}
+
 		if item.Content != nil {
-			if item.Content.Type != "text" {
-				post = post + html2md.Convert(item.Content.Body) + "\n"
-			} else {
-				post = post + item.Content.Body + "\n"
+			body := strings.TrimSpace(item.Content.Body)
+			if body != "" {
+				if item.Content.Type != "text"  {
+					attachment.Text = html2md.Convert(item.Content.Body)
+				} else {
+					attachment.Text = item.Content.Body
+				}
 			}
 		} else {
 			p.API.LogInfo("Missing content in atom feed item",
 				"subscription_url", subscription.URL,
 				"item_title", item.Title)
-			post = post + "\n"
 		}
-		p.createBotPost(subscription.ChannelID, post, "custom_git_pr")
+		p.createBotPost(subscription.ChannelID, attachment, "custom_git_pr")
 	}
 
 	if len(items) > 0 {
@@ -201,22 +225,39 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 	return nil
 }
 
-func (p *RSSFeedPlugin) createBotPost(channelID string, message string, postType string) error {
+func (p *RSSFeedPlugin) createBotPost(channelID string, attachment *model.SlackAttachment, postType string) error {
+	attachments := []*model.SlackAttachment{
+		attachment,
+	}
+
 	post := &model.Post{
 		UserId:    p.botUserID,
 		ChannelId: channelID,
-		Message:   message,
+		Message:   "",
 		Type:      postType,
-		/*Props: map[string]interface{}{
-			"from_webhook":      "true",
-			"override_username": botDisplayName,
-		},*/
+		Props: model.StringInterface{
+			"attachments": attachments,
+		},
 	}
-
 	if _, err := p.API.CreatePost(post); err != nil {
 		p.API.LogError(err.Error())
 		return err
 	}
 
 	return nil
+}
+
+
+
+func getGravatarIcon(email string) string {
+	const url = "https://www.gravatar.com/avatar/"
+	parameters := "?d=mp&s=40" // TODO : Add setting to control fallback image https://en.gravatar.com/site/implement/images/
+	hash := ""
+	if email == "" {
+		hash = "00000000000000000000000000000000"
+	} else {
+		sum := md5.Sum([]byte(strings.TrimSpace(email)))
+		hash = fmt.Sprintf("%x", sum)
+	}
+	return url + hash + parameters
 }
