@@ -201,14 +201,12 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 		}
 
 		if item.Content != nil {
-			body := strings.TrimSpace(item.Content.Body)
-			if body != "" {
-				if item.Content.Type != "text" {
-					attachment.Text = html2md.Convert(item.Content.Body)
-				} else {
-					attachment.Text = item.Content.Body
-				}
+			body := attachment.Text
+			if item.Content.Type != "text" {
+				body = html2md.Convert(body)
 			}
+			attachment.Text = strings.TrimSpace(body)
+
 		} else {
 			p.API.LogInfo("Missing content in atom feed item",
 				"subscription_url", subscription.URL,
