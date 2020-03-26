@@ -3,10 +3,13 @@ package main
 import (
 	"context"
 	"fmt"
+	URL "net/url"
+	"strings"
+
+	"errors"
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
-	"strings"
 )
 
 // COMMAND_HELP is the text you see when you type /feed help
@@ -40,6 +43,7 @@ func getCommandResponse(responseType, text string) *model.CommandResponse {
 // ExecuteCommand will execute commands ...
 func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
 
+	config := p.getConfiguration()
 	split := strings.Fields(args.Command)
 	command := split[0]
 	parameters := []string{}
@@ -55,12 +59,19 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		return &model.CommandResponse{}, nil
 	}
 
+	private := model.COMMAND_RESPONSE_TYPE_EPHEMERAL
+
+	normal := model.COMMAND_RESPONSE_TYPE_IN_CHANNEL
+	if config.HideSubscribeMessage {
+		normal = private
+	}
+
 	switch action {
 	case "list":
 		txt := "### Subscriptions in this channel\n"
 		subscriptions, err := p.getSubscriptions()
 		if err != nil {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, err.Error()), nil
+			return getCommandResponse(private, err.Error()), nil
 		}
 
 		for _, value := range subscriptions.Subscriptions {
@@ -68,42 +79,61 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 				txt += fmt.Sprintf("* `%s`\n", value.URL)
 			}
 		}
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, txt), nil
+		return getCommandResponse(private, txt), nil
 	case "subscribe":
 
-		if len(parameters) == 0 {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Please specify a url."), nil
-		} else if len(parameters) > 1 {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Please specify a valid url."), nil
-		}
+		url, err := parseUrlParam(&parameters)
 
-		url := parameters[0]
+		if err != nil {
+			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
+		}
 
 		if err := p.subscribe(context.Background(), args.ChannelId, url); err != nil {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, err.Error()), nil
+			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
 		}
 
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Successfully subscribed to %s.", url)), nil
+		return getCommandResponse(normal, fmt.Sprintf("Subscribed to %s.", url)), nil
 	case "unsubscribe":
-		if len(parameters) == 0 {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Please specify a url."), nil
-		} else if len(parameters) > 1 {
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Please specify a valid url."), nil
-		}
 
-		url := parameters[0]
+		url, err := parseUrlParam(&parameters)
+
+		if err != nil {
+			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
+		}
 
 		if err := p.unsubscribe(args.ChannelId, url); err != nil {
 			mlog.Error(err.Error())
-			return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, "Encountered an error trying to unsubscribe. Please try again."), nil
+			return getCommandResponse(private, "Encountered an error trying to unsubscribe. Please try again."), nil
 		}
 
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, fmt.Sprintf("Succesfully unsubscribed from %s.", url)), nil
+		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from %s.", url)), nil
 	case "help":
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, text), nil
+		return getCommandResponse(private, text), nil
 	default:
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
-		return getCommandResponse(model.COMMAND_RESPONSE_TYPE_EPHEMERAL, text), nil
+		return getCommandResponse(private, text), nil
 	}
+}
+
+func parseUrlParam(parameters *[]string) (string, error) {
+	if len(*parameters) == 0 {
+		return "", errors.New("url not specified")
+	} else if len(*parameters) > 1 {
+		return "", errors.New("too many arguments")
+	}
+
+	url := (*parameters)[0]
+
+	if !IsUrl(url) {
+		return "", errors.New("url invalid")
+	}
+
+	return url, nil
+}
+
+//thanks to https://stackoverflow.com/a/55551215/8781351
+func IsUrl(str string) bool {
+	u, err := URL.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
 }

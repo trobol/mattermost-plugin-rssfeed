@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"errors"
 )
 
 // Subscription Object
@@ -12,6 +13,7 @@ type Subscription struct {
 	ChannelID string
 	URL       string
 	XML       string
+	Timestamp int64
 }
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
@@ -27,6 +29,10 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 		ChannelID: channelID,
 		URL:       url,
 		XML:       "",
+	}
+
+	if !isValidFeed(url) {
+		return errors.New("invalid feed")
 	}
 
 	key := getKey(channelID, url)
@@ -48,13 +54,15 @@ func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
 	// check if url already exists
 	_, ok := currentSubscriptions.Subscriptions[key]
 	if !ok {
-		currentSubscriptions.Subscriptions[key] = &Subscription{ChannelID: sub.ChannelID, URL: sub.URL}
+		currentSubscriptions.Subscriptions[key] = &Subscription{ChannelID: sub.ChannelID, URL: sub.URL, Timestamp: 0}
 		err = p.storeSubscriptions(currentSubscriptions)
 		if err != nil {
 			p.API.LogError(err.Error())
 			return err
 		}
 
+	} else {
+		return errors.New("this channel is already subscribed to that feed")
 	}
 
 	return nil

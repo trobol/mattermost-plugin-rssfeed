@@ -25,8 +25,13 @@
                 "display_name": "Show Description in RSS post.",
                 "type": "bool",
                 "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post)."
+            },
+            {
+                "key": "HideSubscribeMessage",
+                "display_name": "Hide the Subscribe/Unsubscribe Message from channel",
+                "type": "bool",
+                "help_text": "Control whether the subscribe and unsubscribe messages are shown to the whole channel or only the user who ran the command"
             }
-            
         ]
     }
 }
