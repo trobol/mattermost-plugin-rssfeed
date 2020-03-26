@@ -20,6 +20,7 @@ import (
 type configuration struct {
 	Heartbeat       string
 	ShowDescription bool
+	HideSubscribeMessage bool
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
