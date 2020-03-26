@@ -233,10 +233,9 @@ func (p *RSSFeedPlugin) createBotPost(channelID string, attachment *model.SlackA
 		ChannelId: channelID,
 		Message:   "",
 		Type:      postType,
-		Props: model.StringInterface{
-			"attachments": attachments,
-		},
 	}
+	post.AddProp("attachments", attachments)
+
 	if _, err := p.API.CreatePost(post); err != nil {
 		p.API.LogError(err.Error())
 		return err
