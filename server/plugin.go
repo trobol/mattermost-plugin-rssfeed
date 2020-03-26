@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/md5"
 	"errors"
+	"fmt"
 	"github.com/lunny/html2md"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
@@ -10,11 +12,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
-	"strings"
-	"crypto/md5"
-	"fmt"
 )
 
 //const RSSFEED_ICON_URL = "./plugins/rssfeed/assets/rss.png"
@@ -144,7 +144,7 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription) err
 
 	for _, item := range items {
 		attachment := &model.SlackAttachment{
-			Title: item.Title,
+			Title:     item.Title,
 			TitleLink: item.Link,
 		}
 
@@ -181,11 +181,10 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 
 		attachment := &model.SlackAttachment{
 			Title: item.Title,
-	
+
 			AuthorName: item.Author.Name,
 			AuthorLink: item.Author.URI,
 			AuthorIcon: getGravatarIcon(item.Author.Email),
-			
 		}
 
 		for _, link := range item.Link {
@@ -194,6 +193,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 			}
 		}
 
+		//currently not supported
 		if item.Published != "" {
 			attachment.Timestamp = string(item.Published)
 		} else {
@@ -203,7 +203,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) erro
 		if item.Content != nil {
 			body := strings.TrimSpace(item.Content.Body)
 			if body != "" {
-				if item.Content.Type != "text"  {
+				if item.Content.Type != "text" {
 					attachment.Text = html2md.Convert(item.Content.Body)
 				} else {
 					attachment.Text = item.Content.Body
@@ -247,8 +247,6 @@ func (p *RSSFeedPlugin) createBotPost(channelID string, attachment *model.SlackA
 	return nil
 }
 
-
-
 func getGravatarIcon(email string) string {
 	const url = "https://www.gravatar.com/avatar/"
 	parameters := "?d=mp&s=40" // TODO : Add setting to control fallback image https://en.gravatar.com/site/implement/images/
@@ -260,4 +258,8 @@ func getGravatarIcon(email string) string {
 		hash = fmt.Sprintf("%x", sum)
 	}
 	return url + hash + parameters
+}
+
+func isValidFeed(url string) bool {
+	return rssv2parser.IsValidFeed(url) || atomparser.IsValidFeed(url)
 }
