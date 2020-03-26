@@ -107,6 +107,27 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		}
 
 		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from %s.", url)), nil
+	case "fetch":
+		url, err := parseUrlParam(&parameters)
+
+		if err != nil {
+			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
+		}
+		subscriptions, err := p.getSubscriptions()
+
+		if err != nil {
+			return getCommandResponse(private, err.Error()), nil
+		}
+
+		key := getKey(args.ChannelId, url)
+		subscription := subscriptions.Subscriptions[key]
+		if subscription != nil {
+			go p.processSubscription(subscription)
+			return getCommandResponse(normal, "Fetching "+url), nil
+		} else {
+			return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
+		}
+
 	case "help":
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
 		return getCommandResponse(private, text), nil
