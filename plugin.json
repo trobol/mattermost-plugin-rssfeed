@@ -31,6 +31,12 @@
                 "display_name": "Hide the Subscribe/Unsubscribe Message from channel",
                 "type": "bool",
                 "help_text": "Control whether the subscribe and unsubscribe messages are shown to the whole channel or only the user who ran the command"
+            },
+            {
+                "key": "GroupMessages",
+                "display_name": "Group Messages",
+                "type": "bool",
+                "help_text": "Control whether new items from the same feed will be grouped into one message"
             }
         ]
     }
