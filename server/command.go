@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	URL "net/url"
 	"strings"
@@ -14,8 +15,9 @@ import (
 
 // COMMAND_HELP is the text you see when you type /feed help
 const COMMAND_HELP = `* |/feed subscribe [url]| - Connect your Mattermost channel to an rss feed 
- * |/feed list| - Lists the rss feeds you have subscribed to
- * |/feed unsubscribe [url]| - Unsubscribes the Mattermost channel from the rss feed`
+* |/feed list| - Lists the rss feeds you have subscribed to
+* |/feed unsubscribe [url]| - Unsubscribes the Mattermost channel from the rss feed
+* |/feed fetch [url]| - Fetches the latest content from the rss feed`
 
 // + `* |/feed initiate| - initiates the rss feed subscription poller`
 
@@ -88,9 +90,10 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
 		}
 
-		if err := p.subscribe(context.Background(), args.ChannelId, url); err != nil {
+		if err != nil {
 			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
 		}
+		p.subscribe(context.Background(), args.ChannelId, url)
 
 		return getCommandResponse(normal, fmt.Sprintf("Subscribed to %s.", url)), nil
 	case "unsubscribe", "unsub":
@@ -127,7 +130,10 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		} else {
 			return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
 		}
-
+	case "msg":
+		posts, _ := p.API.GetPostsForChannel(args.ChannelId, 0, 10)
+		str, _ := json.Marshal(posts)
+		return getCommandResponse(normal, "Data "+string(str[:])), nil
 	case "help":
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
 		return getCommandResponse(private, text), nil
