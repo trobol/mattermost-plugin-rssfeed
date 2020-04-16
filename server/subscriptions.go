@@ -4,17 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"errors"
+	"fmt"
 )
-
-// Subscription Object
-type Subscription struct {
-	ChannelID string
-	URL       string
-	XML       string
-	Timestamp int64
-}
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
 
