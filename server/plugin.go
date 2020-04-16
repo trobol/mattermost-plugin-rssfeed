@@ -3,13 +3,9 @@ package main
 import (
 	"crypto/md5"
 	"encoding/json"
+	"encoding/xml"
 	"errors"
 	"fmt"
-	"github.com/lunny/html2md"
-	"github.com/mattermost/mattermost-server/model"
-	"github.com/mattermost/mattermost-server/plugin"
-	"github.com/wbernest/atom-parser"
-	"github.com/wbernest/rss-v2-parser"
 	"io/ioutil"
 	"net/http"
 	"strconv"
@@ -17,6 +13,11 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/lunny/html2md"
+	"github.com/mattermost/mattermost-server/model"
+	"github.com/mattermost/mattermost-server/plugin"
+	"golang.org/x/net/html/charset"
 )
 
 //const RSSFEED_ICON_URL = "./plugins/rssfeed/assets/rss.png"
@@ -105,32 +106,12 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 
 func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 	config := p.getConfiguration()
-	if len(subscription.URL) == 0 {
-		return errors.New("no url supplied")
-	}
 
-	var attachments []*model.SlackAttachment
-	if rssv2parser.IsValidFeed(subscription.URL) {
-		var err error
-		attachments, err = p.processRSSV2Subscription(subscription)
-		if err != nil {
-			return errors.New("invalid RSS v2 feed format - " + err.Error())
-		}
-
-	} else if atomparser.IsValidFeed(subscription.URL) {
-		var err error
-		attachments, err = p.processAtomSubscription(subscription)
-		if err != nil {
-			return errors.New("invalid atom feed format - " + err.Error())
-		}
-	} else {
-		return errors.New("invalid feed format")
-	}
+	attachments, err := p.buildAttachments(subscription)
 
 	//Send as separate messages or group as few messages as possible
 	var groupedAttachments [][]*model.SlackAttachment
 	if config.GroupMessages {
-		var err error
 		groupedAttachments, err = p.groupAttachments(attachments)
 		if err != nil {
 			return err
@@ -139,7 +120,6 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 		groupedAttachments = p.padAttachments(attachments)
 	}
 
-	p.API.LogError(fmt.Sprintf("%i", len(groupedAttachments)))
 	for _, group := range groupedAttachments {
 
 		p.createBotPost(subscription.ChannelID, group, "custom_git_pr")
@@ -148,22 +128,52 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 	return nil
 }
 
-func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription) ([]*model.SlackAttachment, error) {
+func (p *RSSFeedPlugin) buildAttachments(subscription *Subscription) ([]*model.SlackAttachment, error) {
+
+	if len(subscription.URL) == 0 {
+		return nil, errors.New("no url supplied")
+	}
+
+	res, err := subscription.Fetch()
+
+	if err != nil {
+		return nil, err
+	}
+
+	if res.Body == nil {
+		return nil, errors.New("had no body")
+	}
+
+	str := string(res.Body)
+
+	decoder := xml.NewDecoder(strings.NewReader(str))
+	decoder.CharsetReader = charset.NewReaderLabel
+
+	rssFeed, err := RSSV2ParseString(str)
+
+	if err == nil {
+		return p.processRSSV2Subscription(subscription, rssFeed, str)
+	}
+
+	atomFeed, err := AtomParseString(str)
+
+	if err == nil {
+		return p.processAtomSubscription(subscription, atomFeed, str)
+	}
+
+	return nil, errors.New("invalid feed format")
+}
+
+func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, newRssFeed *RSSV2, newRssFeedString string) ([]*model.SlackAttachment, error) {
 	config := p.getConfiguration()
 
-	// get new rss feed string from url
-	newRssFeed, newRssFeedString, err := rssv2parser.ParseURL(subscription.URL)
-	if err != nil {
-		return nil, err
-	}
-
 	// retrieve old xml feed from database
-	oldRssFeed, err := rssv2parser.ParseString(subscription.XML)
+	oldRssFeed, err := RSSV2ParseString(subscription.XML)
 	if err != nil {
 		return nil, err
 	}
 
-	items := rssv2parser.CompareItemsBetweenOldAndNew(oldRssFeed, newRssFeed)
+	items := RSSV2CompareItemsBetweenOldAndNew(oldRssFeed, newRssFeed)
 	attachments := make([]*model.SlackAttachment, len(items))
 	for index, item := range items {
 		attachment := &model.SlackAttachment{
@@ -184,20 +194,15 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription) ([]
 	return attachments, nil
 }
 
-func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) ([]*model.SlackAttachment, error) {
-	// get new rss feed string from url
-	newFeed, newFeedString, err := atomparser.ParseURL(subscription.URL)
-	if err != nil {
-		return nil, err
-	}
+func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, newFeed *AtomFeed, newFeedString string) ([]*model.SlackAttachment, error) {
 
 	// retrieve old xml feed from database
-	oldFeed, err := atomparser.ParseString(subscription.XML)
+	oldFeed, err := AtomParseString(subscription.XML)
 	if err != nil {
 		return nil, err
 	}
 
-	items := atomparser.CompareItemsBetweenOldAndNew(oldFeed, newFeed)
+	items := AtomCompareItemsBetweenOldAndNew(oldFeed, newFeed)
 
 	attachments := make([]*model.SlackAttachment, len(items))
 
@@ -247,7 +252,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription) ([]*
 	return attachments, nil
 }
 
-// # of characters Json encoded array of slack attachments must be smaller than POST_PROPS_MAX_RUNES
+// number of characters Json encoded array of slack attachments must be smaller than POST_PROPS_MAX_USER_RUNES
 func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) ([][]*model.SlackAttachment, error) {
 
 	start := 0
@@ -341,5 +346,30 @@ func getGravatarIcon(email string) string {
 }
 
 func isValidFeed(url string) bool {
-	return rssv2parser.IsValidFeed(url) || atomparser.IsValidFeed(url)
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return false
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+
+	str := string(body)
+
+	return isValidRssFeed(str) || isValidAtomFeed(str)
+}
+
+func isValidRssFeed(str string) bool {
+	_, err := RSSV2ParseString(str)
+	return err != nil
+}
+
+func isValidAtomFeed(str string) bool {
+	_, err := AtomParseString(str)
+	return err != nil
 }
