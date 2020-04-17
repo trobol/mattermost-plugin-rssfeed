@@ -109,6 +109,14 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 
 	attachments, err := p.processFeed(subscription)
 
+	if err != nil {
+		return err
+	}
+
+	if attachments == nil {
+		return nil
+	}
+
 	//Send as separate messages or group as few messages as possible
 	var groupedAttachments [][]*model.SlackAttachment
 	if config.GroupMessages {
@@ -141,8 +149,12 @@ func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackA
 		return nil, err
 	}
 
+	if res.StatusCode == 304 {
+		return nil, nil
+	}
+
 	if res.Body == nil {
-		return nil, errors.New("had no body")
+		return nil, errors.New("feed missing body")
 	}
 
 	str := string(res.Body)
