@@ -210,6 +210,12 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, new
 
 func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed *AtomFeed) ([]*model.SlackAttachment, error) {
 
+	feedTimestamp := AtomParseTimestamp(feed.Updated)
+
+	if subscription.Timestamp >= AtomParseTimestamp(feed.Updated) {
+		return nil, nil
+	}
+
 	items := feed.ItemsAfter(subscription.Timestamp)
 
 	attachments := make([]*model.SlackAttachment, len(items))
@@ -252,7 +258,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed
 
 	}
 
-	subscription.Timestamp = AtomParseTimestamp(feed.Updated)
+	subscription.Timestamp = feedTimestamp
 
 	return attachments, nil
 }
