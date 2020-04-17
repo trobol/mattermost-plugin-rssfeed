@@ -306,7 +306,7 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 		}
 
 	}
-	if start != len(attachments) {
+	if start < len(attachments) {
 		groupedAttachments = append(groupedAttachments, attachments[start:len(attachments)])
 	}
 
