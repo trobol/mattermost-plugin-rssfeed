@@ -29,7 +29,14 @@ type SubscriptionResponse struct {
 }
 
 func (s *Subscription) Fetch() (SubscriptionResponse, error) {
-	resp, err := http.Get(s.URL)
+
+	client := &http.Client{}
+
+	req, err := http.NewRequest("GET", s.URL, nil)
+
+	req.Header.Add("If-None-Match", s.ETag)
+
+	resp, err := client.Do(req)
 	if err != nil {
 		return SubscriptionResponse{nil, resp.Header, resp.StatusCode}, nil
 	}
