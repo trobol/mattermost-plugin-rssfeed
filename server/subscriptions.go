@@ -117,25 +117,28 @@ func (p *RSSFeedPlugin) storeSubscriptions(s *Subscriptions) error {
 	return nil
 }
 
-func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) error {
+func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription, error) {
 
 	currentSubscriptions, err := p.getSubscriptions()
 	if err != nil {
 		p.API.LogError(err.Error())
-		return err
+		return nil, err
 	}
 
+	subClone := &Subscription{}
+
 	key := getKey(channelID, url)
-	_, ok := currentSubscriptions.Subscriptions[key]
+	sub, ok := currentSubscriptions.Subscriptions[key]
+	*subClone = *sub
 	if ok {
 		delete(currentSubscriptions.Subscriptions, key)
 		if err := p.storeSubscriptions(currentSubscriptions); err != nil {
 			p.API.LogError(err.Error())
-			return err
+			return nil, err
 		}
 	}
 
-	return nil
+	return subClone, nil
 }
 
 func (p *RSSFeedPlugin) updateSubscription(subscription *Subscription) error {
