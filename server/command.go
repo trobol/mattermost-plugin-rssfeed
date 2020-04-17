@@ -107,13 +107,13 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		if err != nil {
 			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
 		}
-
-		if err := p.unsubscribe(args.ChannelId, url); err != nil {
+		sub, err := p.unsubscribe(args.ChannelId, url)
+		if err != nil {
 			mlog.Error(err.Error())
 			return getCommandResponse(private, "Encountered an error trying to unsubscribe. Please try again."), nil
 		}
 
-		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", url)), nil
+		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", sub.Title, url)), nil
 	case "fetch":
 		url, err := parseUrlParam(&parameters)
 
