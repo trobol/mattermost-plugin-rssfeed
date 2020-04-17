@@ -107,7 +107,7 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 	config := p.getConfiguration()
 
-	attachments, err := p.buildAttachments(subscription)
+	attachments, err := p.processFeed(subscription)
 
 	//Send as separate messages or group as few messages as possible
 	var groupedAttachments [][]*model.SlackAttachment
@@ -125,10 +125,13 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 		p.createBotPost(subscription.ChannelID, group, "custom_git_pr")
 	}
 
+	subscription.Timestamp = time.Now().Unix()
+
+	p.updateSubscription(subscription)
 	return nil
 }
 
-func (p *RSSFeedPlugin) buildAttachments(subscription *Subscription) ([]*model.SlackAttachment, error) {
+func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackAttachment, error) {
 
 	if len(subscription.URL) == 0 {
 		return nil, errors.New("no url supplied")
@@ -158,7 +161,7 @@ func (p *RSSFeedPlugin) buildAttachments(subscription *Subscription) ([]*model.S
 	atomFeed, err := AtomParseString(str)
 
 	if err == nil {
-		return p.processAtomSubscription(subscription, atomFeed, str)
+		return p.processAtomSubscription(subscription, atomFeed)
 	}
 
 	return nil, errors.New("invalid feed format")
@@ -188,21 +191,14 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, new
 	}
 	if len(items) > 0 {
 		subscription.XML = newRssFeedString
-		p.updateSubscription(subscription)
 	}
 
 	return attachments, nil
 }
 
-func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, newFeed *AtomFeed, newFeedString string) ([]*model.SlackAttachment, error) {
+func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed *AtomFeed) ([]*model.SlackAttachment, error) {
 
-	// retrieve old xml feed from database
-	oldFeed, err := AtomParseString(subscription.XML)
-	if err != nil {
-		return nil, err
-	}
-
-	items := AtomCompareItemsBetweenOldAndNew(oldFeed, newFeed)
+	items := feed.ItemsAfter(subscription.Timestamp)
 
 	attachments := make([]*model.SlackAttachment, len(items))
 
@@ -244,10 +240,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, newF
 
 	}
 
-	if len(items) > 0 {
-		subscription.XML = newFeedString
-		p.updateSubscription(subscription)
-	}
+	subscription.Timestamp = AtomParseTimestamp(feed.Updated)
 
 	return attachments, nil
 }
@@ -258,7 +251,6 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 	start := 0
 	size := 2
 
-	//mattermost max runes +
 	groupedAttachments := make([][]*model.SlackAttachment, 0)
 
 	for end, attachment := range attachments {
@@ -270,31 +262,33 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 
 		encodedSize := utf8.RuneCountInString(string(encoded))
 
-		if size > model.POST_PROPS_MAX_USER_RUNES {
-			if start == end {
-				//single attachment is too long, trim then add
-				diff := size - model.POST_PROPS_MAX_USER_RUNES
-				textOffset := len(attachment.Text) - diff
+		size += encodedSize + 1
 
-				if textOffset > 0 {
-					attachment.Text = attachment.Text[:textOffset]
-				} else {
-					//if we cant trim log error and skip
-					p.API.LogError("Attachment was too large and text could not be trimmed")
-				}
-
-				start = end
-				size = 0
-			} else {
-				groupedAttachments = append(groupedAttachments, attachments[start:end])
-			}
+		if size > model.POST_PROPS_MAX_USER_RUNES && start != end {
+			groupedAttachments = append(groupedAttachments, attachments[start:end])
 			start = end
-			size = 0
-		} else {
-			size = size + encodedSize + 1 //+1 for comma
+			size = 2
 		}
+
+		if encodedSize > model.POST_PROPS_MAX_USER_RUNES {
+
+			//single attachment is too long, trim then add
+			diff := encodedSize - model.POST_PROPS_MAX_USER_RUNES
+			textOffset := len(attachment.Text) - diff
+
+			if textOffset > 0 {
+				attachment.Text = attachment.Text[:textOffset]
+
+				groupedAttachments = append(groupedAttachments, []*model.SlackAttachment{attachment})
+			} else {
+				//if we cant trim log error and skip
+				p.API.LogError("Attachment was too large and text could not be trimmed")
+			}
+			start = end + 1
+		}
+
 	}
-	if start <= len(attachments)-1 {
+	if start != len(attachments) {
 		groupedAttachments = append(groupedAttachments, attachments[start:len(attachments)])
 	}
 

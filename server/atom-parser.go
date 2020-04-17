@@ -10,6 +10,8 @@ import (
 
 	"golang.org/x/net/html/charset"
 	"golang.org/x/tools/blog/atom"
+
+	"time"
 )
 
 type AtomFeed atom.Feed
@@ -77,4 +79,22 @@ func AtomCompareItemsBetweenOldAndNew(feedOld *AtomFeed, feedNew *AtomFeed) []*a
 		}
 	}
 	return itemList
+}
+
+// ItemsAfter - Get items that have been updated after timestamp
+func (feed *AtomFeed) ItemsAfter(timestamp int64) []*atom.Entry {
+	itemList := []*atom.Entry{}
+
+	for _, item := range feed.Entry {
+		if AtomParseTimestamp(item.Updated) > timestamp {
+			itemList = append(itemList, item)
+		}
+	}
+	return itemList
+}
+
+// AtomParseTimestamp - turn an atom timestamp into a unix timestamp
+func AtomParseTimestamp(str atom.TimeStr) int64 {
+	t, _ := time.Parse(time.RFC3339, string(str))
+	return int64(t.Unix())
 }
