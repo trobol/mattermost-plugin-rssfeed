@@ -8,8 +8,9 @@ import (
 type SubscriptionFormat int8
 
 const (
-	RSS2 SubscriptionFormat = 0
-	ATOM SubscriptionFormat = 1
+	FEED_FORMAT_UNKNOWN SubscriptionFormat = 0
+	FEED_FORMAT_RSSV2   SubscriptionFormat = 1
+	FEED_FORMAT_ATOM    SubscriptionFormat = 2
 )
 
 // Subscription Object
@@ -20,6 +21,7 @@ type Subscription struct {
 	Timestamp int64
 	ETag      string
 	Format    SubscriptionFormat
+	Title     string
 }
 
 type SubscriptionResponse struct {

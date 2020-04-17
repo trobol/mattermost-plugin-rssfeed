@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 )
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
@@ -16,24 +18,50 @@ type Subscriptions struct {
 }
 
 // Subscribe prosses the /feed subscribe <channel> <url>
-func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) error {
+func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) (*Subscription, error) {
 	sub := &Subscription{
 		ChannelID: channelID,
 		URL:       url,
 		XML:       "",
 	}
 
-	if !isValidFeed(url) {
-		return errors.New("invalid feed")
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, errors.New("Server returned non OK value")
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+
+	str := string(body)
+
+	rssFeed, err := RSSV2ParseString(str)
+
+	if err == nil {
+		sub.Title = rssFeed.Channel.Title
+		sub.Format = FEED_FORMAT_RSSV2
+
+	} else {
+		atomFeed, err := AtomParseString(str)
+		if err == nil {
+			sub.Title = atomFeed.Title
+			sub.Format = FEED_FORMAT_ATOM
+		} else {
+			return nil, errors.New("invalid feed")
+		}
 	}
 
 	key := getKey(channelID, url)
 	if err := p.addSubscription(key, sub); err != nil {
 		p.API.LogError(err.Error())
-		return err
+		return nil, err
 	}
 
-	return nil
+	return sub, nil
 }
 
 func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
@@ -46,7 +74,7 @@ func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
 	// check if url already exists
 	_, ok := currentSubscriptions.Subscriptions[key]
 	if !ok {
-		currentSubscriptions.Subscriptions[key] = &Subscription{ChannelID: sub.ChannelID, URL: sub.URL, Timestamp: 0}
+		currentSubscriptions.Subscriptions[key] = sub
 		err = p.storeSubscriptions(currentSubscriptions)
 		if err != nil {
 			p.API.LogError(err.Error())

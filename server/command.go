@@ -2,12 +2,12 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	URL "net/url"
 	"strings"
 
 	"errors"
+
 	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
@@ -76,9 +76,9 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, err.Error()), nil
 		}
 
-		for _, value := range subscriptions.Subscriptions {
-			if value.ChannelID == args.ChannelId {
-				txt += fmt.Sprintf("* `%s`\n", value.URL)
+		for _, sub := range subscriptions.Subscriptions {
+			if sub.ChannelID == args.ChannelId {
+				txt += fmt.Sprintf("* [%s](%s)\n", sub.Title, sub.URL)
 			}
 		}
 		return getCommandResponse(private, txt), nil
@@ -87,15 +87,19 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		url, err := parseUrlParam(&parameters)
 
 		if err != nil {
-			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
+			return getCommandResponse(private, fmt.Sprintf("Invalid arguments %s.", err.Error())), nil
 		}
 
 		if err != nil {
 			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
 		}
-		p.subscribe(context.Background(), args.ChannelId, url)
+		sub, err := p.subscribe(context.Background(), args.ChannelId, url)
 
-		return getCommandResponse(normal, fmt.Sprintf("Subscribed to %s.", url)), nil
+		if err != nil {
+			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
+		}
+
+		return getCommandResponse(normal, fmt.Sprintf("Subscribed to [%s](%s)", sub.Title, url)), nil
 	case "unsubscribe", "unsub":
 
 		url, err := parseUrlParam(&parameters)
@@ -109,7 +113,7 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, "Encountered an error trying to unsubscribe. Please try again."), nil
 		}
 
-		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from %s.", url)), nil
+		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", url)), nil
 	case "fetch":
 		url, err := parseUrlParam(&parameters)
 
@@ -130,10 +134,6 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		} else {
 			return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
 		}
-	case "msg":
-		posts, _ := p.API.GetPostsForChannel(args.ChannelId, 0, 10)
-		str, _ := json.Marshal(posts)
-		return getCommandResponse(normal, "Data "+string(str[:])), nil
 	case "help":
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
 		return getCommandResponse(private, text), nil
