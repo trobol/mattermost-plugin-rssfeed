@@ -356,32 +356,3 @@ func getGravatarIcon(email string) string {
 	}
 	return url + hash + parameters
 }
-
-func isValidFeed(url string) bool {
-
-	resp, err := http.Get(url)
-	if err != nil {
-		return false
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return false
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
-
-	str := string(body)
-
-	return isValidRssFeed(str) || isValidAtomFeed(str)
-}
-
-func isValidRssFeed(str string) bool {
-	_, err := RSSV2ParseString(str)
-	return err != nil
-}
-
-func isValidAtomFeed(str string) bool {
-	_, err := AtomParseString(str)
-	return err != nil
-}
