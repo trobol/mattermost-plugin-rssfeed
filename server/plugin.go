@@ -125,8 +125,6 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 		p.createBotPost(subscription.ChannelID, group, "custom_git_pr")
 	}
 
-	subscription.Timestamp = time.Now().Unix()
-
 	p.updateSubscription(subscription)
 	return nil
 }
@@ -192,6 +190,8 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, new
 	if len(items) > 0 {
 		subscription.XML = newRssFeedString
 	}
+
+	subscription.Timestamp = time.Now().Unix()
 
 	return attachments, nil
 }
