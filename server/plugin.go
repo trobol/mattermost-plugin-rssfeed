@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/xml"
 	"errors"
@@ -205,6 +206,8 @@ func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, new
 
 func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed *AtomFeed) ([]*model.SlackAttachment, error) {
 
+	config := p.getConfiguration()
+
 	feedTimestamp := AtomParseTimestamp(feed.Updated)
 
 	if subscription.Timestamp >= AtomParseTimestamp(feed.Updated) {
@@ -221,7 +224,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed
 			Fallback:   item.Title,
 			AuthorName: item.Author.Name,
 			AuthorLink: item.Author.URI,
-			AuthorIcon: getGravatarIcon(item.Author.Email),
+			AuthorIcon: getGravatarIcon(item.Author.Email, config.GravatarDefault),
 		}
 
 		attachments[index] = attachment
@@ -328,9 +331,6 @@ func (p *RSSFeedPlugin) createBotPost(channelID string, attachments []*model.Sla
 
 	post.AddProp("attachments", attachments)
 
-	//str, _ := json.Marshal(attachments)
-	//post.Message = string(str)
-
 	if _, err := p.API.CreatePost(post); err != nil {
 		p.API.LogError(err.Error())
 		return err
@@ -339,15 +339,13 @@ func (p *RSSFeedPlugin) createBotPost(channelID string, attachments []*model.Sla
 	return nil
 }
 
-func getGravatarIcon(email string) string {
-	const url = "https://www.gravatar.com/avatar/"
-	parameters := "?d=mp&s=40" // TODO : Add setting to control fallback image https://en.gravatar.com/site/implement/images/
+func getGravatarIcon(email string, defaultIcon string) string {
 	hash := ""
 	if email == "" {
 		hash = "00000000000000000000000000000000"
 	} else {
 		sum := md5.Sum([]byte(strings.TrimSpace(email)))
-		hash = fmt.Sprintf("%x", sum)
+		hash = hex.EncodeToString(sum[:])
 	}
-	return url + hash + parameters
+	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?d=%s&s40", hash, defaultIcon)
 }

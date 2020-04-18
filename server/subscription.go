@@ -30,7 +30,17 @@ func (s *Subscription) Fetch() ([]byte, error) {
 
 	req, err := http.NewRequest("GET", s.URL, nil)
 
+	if err != nil {
+		return nil, err
+	}
+
 	req.Header.Add("If-None-Match", s.ETag)
+
+	return fetchRequest(client, req)
+
+}
+
+func fetchRequest(client *http.Client, req *http.Request) ([]byte, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {

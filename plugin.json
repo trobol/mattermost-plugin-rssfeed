@@ -37,6 +37,56 @@
                 "display_name": "Group Messages",
                 "type": "bool",
                 "help_text": "Control whether new items from the same feed will be grouped into one message"
+            },
+            {
+                "key": "GravatarDefault",
+                "display_name": "Gravatar Default Icon",
+                "type": "dropdown",
+                "help_text": "The default icon when a user's icon can't be found [Gravatar Icons](https://en.gravatar.com/site/implement/images/)",
+                "default": "mp",
+                "options": [{
+                    "display_name": "mystery-person",
+                    "value": "mp"
+                },
+                {
+                    "display_name": "identicon",
+                    "value": "identicon"
+                },
+                {
+                    "display_name": "monsterid",
+                    "value": "monsterid"
+                },
+                {
+                    "display_name":"wavatar",
+                    "value":"wavatar"
+                },
+                {
+                    "display_name":"retro",
+                    "value":"retro"
+                },
+                {
+                    "display_name":"robohash",
+                    "value":"robohash"
+                },
+                {
+                    "display_name":"blank",
+                    "value":"blank"
+                },
+                {
+                    "display_name":"404",
+                    "value":"404"
+                },
+                {
+                    "display_name":"custom",
+                    "value":"custom"
+                }]
+            },
+            {
+                "key": "GravatarCustom",
+                "display_name": "Custom Gravatar Icon URL",
+                "type": "text",
+                "help_text": "`Gravatar Default Icon` must be set to `custom`",
+                "default": ""
             }
         ]
     }
