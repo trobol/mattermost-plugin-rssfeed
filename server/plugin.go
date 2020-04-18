@@ -143,21 +143,16 @@ func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackA
 		return nil, errors.New("no url supplied")
 	}
 
-	res, err := subscription.Fetch()
+	data, err := subscription.Fetch()
 
 	if err != nil {
 		return nil, err
 	}
-
-	if res.StatusCode == 304 {
+	if data == nil {
 		return nil, nil
 	}
 
-	if res.Body == nil {
-		return nil, errors.New("feed missing body")
-	}
-
-	str := string(res.Body)
+	str := string(data)
 
 	decoder := xml.NewDecoder(strings.NewReader(str))
 	decoder.CharsetReader = charset.NewReaderLabel
