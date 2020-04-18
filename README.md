@@ -1,4 +1,4 @@
-# RSSFeed Plugin [![CircleCI branch](https://img.shields.io/circleci/project/github/wbernest/mattermost-plugin-rssfeed/master.svg)](https://circleci.com/gh/wbernest/mattermost-plugin-rssfeed/tree/master)
+# RSSFeed Plugin [![CircleCI](https://circleci.com/gh/trobol/mattermost-plugin-rssfeed.svg?style=svg)](https://circleci.com/gh/trobol/mattermost-plugin-rssfeed)
 
 This plugin allows a user to subscribe a channel to an RSS (Version 2 only) or an Atom Feed.
 
