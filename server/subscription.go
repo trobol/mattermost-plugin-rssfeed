@@ -24,13 +24,7 @@ type Subscription struct {
 	Title     string
 }
 
-type SubscriptionResponse struct {
-	Body       []byte
-	Header     http.Header
-	StatusCode int
-}
-
-func (s *Subscription) Fetch() (SubscriptionResponse, error) {
+func (s *Subscription) Fetch() ([]byte, error) {
 
 	client := &http.Client{}
 
@@ -40,15 +34,17 @@ func (s *Subscription) Fetch() (SubscriptionResponse, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return SubscriptionResponse{nil, resp.Header, resp.StatusCode}, nil
+		return nil, nil
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return SubscriptionResponse{nil, resp.Header, resp.StatusCode}, nil
+	if resp.StatusCode == http.StatusNotModified {
+		return nil, nil
+	} else if resp.StatusCode != http.StatusOK {
+		return nil, err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	return SubscriptionResponse{body, resp.Header, resp.StatusCode}, nil
+	return body, nil
 }
