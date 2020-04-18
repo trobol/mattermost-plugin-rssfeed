@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net/url"
 	"reflect"
 
 	"github.com/pkg/errors"
@@ -22,6 +23,9 @@ type configuration struct {
 	ShowDescription      bool
 	HideSubscribeMessage bool
 	GroupMessages        bool
+	GravatarDefault      string
+	GravatarCustom       string
+	disabled             bool
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
@@ -74,11 +78,15 @@ func (p *RSSFeedPlugin) setConfiguration(configuration *configuration) {
 
 // OnConfigurationChange is invoked when configuration changes may have been made.
 func (p *RSSFeedPlugin) OnConfigurationChange() error {
-	var configuration = new(configuration)
+	var configuration = p.getConfiguration().Clone()
 
 	// Load the public configuration fields from the Mattermost server configuration.
 	if err := p.API.LoadPluginConfiguration(configuration); err != nil {
 		return errors.Wrap(err, "failed to load plugin configuration")
+	}
+
+	if configuration.GravatarDefault == "custom" {
+		configuration.GravatarDefault = url.QueryEscape(configuration.GravatarCustom)
 	}
 
 	p.setConfiguration(configuration)

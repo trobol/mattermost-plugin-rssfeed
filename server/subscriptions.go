@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"net/http"
 )
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
@@ -25,17 +23,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 		XML:       "",
 	}
 
-	resp, err := http.Get(url)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("Server returned non OK value")
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := sub.Fetch()
 
 	str := string(body)
 
