@@ -13,8 +13,6 @@ require (
 	github.com/pelletier/go-toml v1.4.0 // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/stretchr/objx v0.2.0 // indirect
-	github.com/wbernest/atom-parser v0.0.0-20190507183633-f862cce5996a
-	github.com/wbernest/rss-v2-parser v0.0.0-20190507183749-19659d6a25f2
 	go.uber.org/atomic v1.4.0 // indirect
 	go.uber.org/zap v1.10.0 // indirect
 	golang.org/x/crypto v0.0.0-20190621222207-cc06ce4a13d4 // indirect
