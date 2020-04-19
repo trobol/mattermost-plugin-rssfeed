@@ -14,7 +14,11 @@ import (
 	"time"
 )
 
-type AtomFeed atom.Feed
+type AtomFeed struct {
+	atom.Feed
+	Icon      string `xml:"icon"`
+	Generator string `xml:"generator"`
+}
 
 // AtomParseString will be used to parse strings and will return the Atom object
 func AtomParseString(s string) (*AtomFeed, error) {

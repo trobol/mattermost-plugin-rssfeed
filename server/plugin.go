@@ -131,7 +131,7 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 
 	for _, group := range groupedAttachments {
 
-		p.createBotPost(subscription.ChannelID, group, "custom_git_pr")
+		p.createBotPost("", group, subscription.ChannelID, model.POST_DEFAULT)
 	}
 
 	p.updateSubscription(subscription)
@@ -144,27 +144,25 @@ func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackA
 		return nil, errors.New("no url supplied")
 	}
 
-	data, err := subscription.Fetch()
+	body, err := subscription.FetchBody()
 
 	if err != nil {
 		return nil, err
 	}
-	if data == nil {
+	if body == "" {
 		return nil, nil
 	}
 
-	str := string(data)
-
-	decoder := xml.NewDecoder(strings.NewReader(str))
+	decoder := xml.NewDecoder(strings.NewReader(body))
 	decoder.CharsetReader = charset.NewReaderLabel
 
-	rssFeed, err := RSSV2ParseString(str)
+	rssFeed, err := RSSV2ParseString(body)
 
 	if err == nil {
-		return p.processRSSV2Subscription(subscription, rssFeed, str)
+		return p.processRSSV2Subscription(subscription, rssFeed, body)
 	}
 
-	atomFeed, err := AtomParseString(str)
+	atomFeed, err := AtomParseString(body)
 
 	if err == nil {
 		return p.processAtomSubscription(subscription, atomFeed)
@@ -320,13 +318,13 @@ func (p *RSSFeedPlugin) padAttachments(attachments []*model.SlackAttachment) [][
 	return result
 }
 
-func (p *RSSFeedPlugin) createBotPost(channelID string, attachments []*model.SlackAttachment, postType string) error {
+func (p *RSSFeedPlugin) createBotPost(msg string, attachments []*model.SlackAttachment, channelID string, postType string) error {
 
 	post := &model.Post{
 		UserId:    p.botUserID,
 		ChannelId: channelID,
-
-		Type: postType,
+		Message:   msg,
+		Type:      postType,
 	}
 
 	post.AddProp("attachments", attachments)

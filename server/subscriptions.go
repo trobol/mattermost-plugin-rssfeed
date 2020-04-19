@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	"github.com/mattermost/mattermost-server/model"
 )
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
@@ -16,40 +18,48 @@ type Subscriptions struct {
 }
 
 // Subscribe prosses the /feed subscribe <channel> <url>
-func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) (*Subscription, error) {
+func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) {
 	sub := &Subscription{
 		ChannelID: channelID,
 		URL:       url,
 		XML:       "",
 	}
 
-	body, err := sub.Fetch()
+	info, err := sub.FetchInfo()
 
-	str := string(body)
-
-	rssFeed, err := RSSV2ParseString(str)
-
-	if err == nil {
-		sub.Title = rssFeed.Channel.Title
-		sub.Format = FEED_FORMAT_RSSV2
-
-	} else {
-		atomFeed, err := AtomParseString(str)
-		if err == nil {
-			sub.Title = atomFeed.Title
-			sub.Format = FEED_FORMAT_ATOM
-		} else {
-			return nil, errors.New("invalid feed")
-		}
+	if err != nil {
+		p.API.LogError(err.Error())
+		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
+		return
 	}
+
+	sub.Title = info.Title
 
 	key := getKey(channelID, url)
 	if err := p.addSubscription(key, sub); err != nil {
-		p.API.LogError(err.Error())
-		return nil, err
+		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
+		return
 	}
 
-	return sub, nil
+	attachment := &model.SlackAttachment{
+		Text:     fmt.Sprintf("**[%s](%s)**", info.Title, info.Alternate),
+		ThumbURL: info.Icon,
+		Fields: []*model.SlackAttachmentField{
+			&model.SlackAttachmentField{
+				Title: "Author",
+				Value: info.AuthorName,
+				Short: true,
+			},
+			&model.SlackAttachmentField{
+				Title: "Generator",
+				Value: info.Generator,
+				Short: true,
+			},
+		},
+	}
+
+	p.createBotPost("Subscribed to:", []*model.SlackAttachment{attachment}, channelID, model.POST_DEFAULT)
+
 }
 
 func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
@@ -117,16 +127,18 @@ func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription
 
 	key := getKey(channelID, url)
 	sub, ok := currentSubscriptions.Subscriptions[key]
-	*subClone = *sub
 	if ok {
+		*subClone = *sub
 		delete(currentSubscriptions.Subscriptions, key)
 		if err := p.storeSubscriptions(currentSubscriptions); err != nil {
 			p.API.LogError(err.Error())
 			return nil, err
 		}
+
+		return subClone, nil
 	}
 
-	return subClone, nil
+	return nil, errors.New("not subscribed")
 }
 
 func (p *RSSFeedPlugin) updateSubscription(subscription *Subscription) error {

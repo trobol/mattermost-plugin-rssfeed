@@ -8,7 +8,6 @@ import (
 
 	"errors"
 
-	"github.com/mattermost/mattermost-server/mlog"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
 )
@@ -90,16 +89,22 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, fmt.Sprintf("Invalid arguments %s.", err.Error())), nil
 		}
 
-		if err != nil {
-			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
-		}
-		sub, err := p.subscribe(context.Background(), args.ChannelId, url)
+		subscriptions, err := p.getSubscriptions()
 
 		if err != nil {
-			return getCommandResponse(private, fmt.Sprintf("Failed to subscribe: %s.", err.Error())), nil
+			return getCommandResponse(private, fmt.Sprintf("Error: %s", err)), nil
 		}
 
-		return getCommandResponse(normal, fmt.Sprintf("Subscribed to [%s](%s)", sub.Title, url)), nil
+		key := getKey(args.ChannelId, url)
+		sub, ok := subscriptions.Subscriptions[key]
+
+		if ok {
+			return getCommandResponse(private, fmt.Sprintf("Already Subscribed to [%s](%s)", sub.Title, url)), nil
+		}
+
+		go p.subscribe(context.Background(), args.ChannelId, url)
+
+		return getCommandResponse(private, fmt.Sprintf("Attempting to Subscribed to %s", url)), nil
 	case "unsubscribe", "unsub":
 
 		url, err := parseUrlParam(&parameters)
@@ -109,8 +114,7 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		}
 		sub, err := p.unsubscribe(args.ChannelId, url)
 		if err != nil {
-			mlog.Error(err.Error())
-			return getCommandResponse(private, "Encountered an error trying to unsubscribe. Please try again."), nil
+			return getCommandResponse(private, fmt.Sprintf("Unable to unsubscribe: `%s`", err.Error())), nil
 		}
 
 		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", sub.Title, url)), nil
