@@ -1,8 +1,10 @@
 package main
 
 import (
+	"errors"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type SubscriptionFormat int8
@@ -24,14 +26,24 @@ type Subscription struct {
 	Title     string
 }
 
-func (s *Subscription) Fetch() ([]byte, error) {
+type SubscriptionInfo struct {
+	Title      string
+	AuthorName string
+	AuthorURL  string
+	Format     SubscriptionFormat
+	Alternate  string
+	Icon       string
+	Generator  string
+}
+
+func (s *Subscription) FetchBody() (string, error) {
 
 	client := &http.Client{}
 
 	req, err := http.NewRequest("GET", s.URL, nil)
 
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	req.Header.Add("If-None-Match", s.ETag)
@@ -40,21 +52,78 @@ func (s *Subscription) Fetch() ([]byte, error) {
 
 }
 
-func fetchRequest(client *http.Client, req *http.Request) ([]byte, error) {
+func fetchRequest(client *http.Client, req *http.Request) (string, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, nil
+		return "", err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode == http.StatusNotModified {
-		return nil, nil
+		return "", nil
 	} else if resp.StatusCode != http.StatusOK {
-		return nil, err
+		return "", err
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 
-	return body, nil
+	if err != nil {
+		return "", err
+	}
+
+	return string(body), nil
+}
+
+func (s *Subscription) FetchInfo() (*SubscriptionInfo, error) {
+
+	client := &http.Client{
+		Timeout: time.Second,
+	}
+
+	req, err := http.NewRequest("GET", s.URL, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := fetchRequest(client, req)
+	if err != nil {
+		return nil, err
+	}
+
+	atomFeed, err := AtomParseString(body)
+
+	if err == nil {
+		info := &SubscriptionInfo{
+			Title:      atomFeed.Title,
+			Format:     FEED_FORMAT_ATOM,
+			AuthorName: atomFeed.Author.Name,
+			AuthorURL:  atomFeed.Author.URI,
+			Icon:       atomFeed.Icon,
+			Generator:  atomFeed.Generator,
+		}
+
+		for _, link := range atomFeed.Link {
+			if link.Rel == "alternate" {
+				info.Alternate = link.Href
+				break
+			}
+		}
+
+		return info, nil
+	}
+
+	rssFeed, err := RSSV2ParseString(body)
+
+	if err == nil {
+		info := &SubscriptionInfo{
+			Title:  rssFeed.Channel.Title,
+			Format: FEED_FORMAT_RSSV2,
+		}
+
+		return info, nil
+	}
+
+	return nil, errors.New("invalid feed")
+
 }
