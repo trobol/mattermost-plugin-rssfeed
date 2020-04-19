@@ -76,15 +76,23 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
-	dictionaryOfSubscriptions, err := p.getSubscriptions()
+
+	keys, err := p.API.KVList(0, 50)
+
 	if err != nil {
 		return err
 	}
-
-	for _, value := range dictionaryOfSubscriptions.Subscriptions {
-		err := p.processSubscription(value)
+	for _, key := range keys {
+		dictionaryOfSubscriptions, err := p.getSubscriptions(key)
 		if err != nil {
-			p.API.LogError(err.Error())
+			return err
+		}
+
+		for _, value := range dictionaryOfSubscriptions.Subscriptions {
+			err := p.processSubscription(key, value)
+			if err != nil {
+				p.API.LogError(err.Error())
+			}
 		}
 	}
 
@@ -105,7 +113,7 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 	return heartbeatTime, nil
 }
 
-func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
+func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subscription) error {
 	config := p.getConfiguration()
 
 	attachments, err := p.processFeed(subscription)
@@ -131,10 +139,10 @@ func (p *RSSFeedPlugin) processSubscription(subscription *Subscription) error {
 
 	for _, group := range groupedAttachments {
 
-		p.createBotPost("", group, subscription.ChannelID, model.POST_DEFAULT)
+		p.createBotPost("", group, channelID, model.POST_DEFAULT)
 	}
 
-	p.updateSubscription(subscription)
+	p.updateSubscription(channelID, subscription)
 	return nil
 }
 
