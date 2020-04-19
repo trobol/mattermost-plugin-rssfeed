@@ -17,7 +17,6 @@ const (
 
 // Subscription Object
 type Subscription struct {
-	ChannelID string
 	URL       string
 	XML       string
 	Timestamp int64

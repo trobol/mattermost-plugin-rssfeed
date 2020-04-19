@@ -70,15 +70,13 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 	switch action {
 	case "list":
 		txt := "### Subscriptions in this channel\n"
-		subscriptions, err := p.getSubscriptions()
+		subscriptions, err := p.getSubscriptions(args.ChannelId)
 		if err != nil {
 			return getCommandResponse(private, err.Error()), nil
 		}
 
 		for _, sub := range subscriptions.Subscriptions {
-			if sub.ChannelID == args.ChannelId {
-				txt += fmt.Sprintf("* [%s](%s)\n", sub.Title, sub.URL)
-			}
+			txt += fmt.Sprintf("* [%s](%s)\n", sub.Title, sub.URL)
 		}
 		return getCommandResponse(private, txt), nil
 	case "subscribe", "sub":
@@ -89,13 +87,13 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, fmt.Sprintf("Invalid arguments %s.", err.Error())), nil
 		}
 
-		subscriptions, err := p.getSubscriptions()
+		subscriptions, err := p.getSubscriptions(args.ChannelId)
 
 		if err != nil {
 			return getCommandResponse(private, fmt.Sprintf("Error: %s", err)), nil
 		}
 
-		key := getKey(args.ChannelId, url)
+		key := url
 		sub, ok := subscriptions.Subscriptions[key]
 
 		if ok {
@@ -124,16 +122,16 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		if err != nil {
 			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
 		}
-		subscriptions, err := p.getSubscriptions()
+		subscriptions, err := p.getSubscriptions(args.ChannelId)
 
 		if err != nil {
 			return getCommandResponse(private, err.Error()), nil
 		}
 
-		key := getKey(args.ChannelId, url)
+		key := url
 		subscription := subscriptions.Subscriptions[key]
 		if subscription != nil {
-			go p.processSubscription(subscription)
+			go p.processSubscription(args.ChannelId, subscription)
 			return getCommandResponse(normal, "Fetching "+url), nil
 		} else {
 			return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil

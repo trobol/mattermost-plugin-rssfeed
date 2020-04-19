@@ -20,9 +20,8 @@ type Subscriptions struct {
 // Subscribe prosses the /feed subscribe <channel> <url>
 func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) {
 	sub := &Subscription{
-		ChannelID: channelID,
-		URL:       url,
-		XML:       "",
+		URL: url,
+		XML: "",
 	}
 
 	info, err := sub.FetchInfo()
@@ -35,8 +34,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 
 	sub.Title = info.Title
 
-	key := getKey(channelID, url)
-	if err := p.addSubscription(key, sub); err != nil {
+	if err := p.addSubscription(channelID, sub); err != nil {
 		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
 		return
 	}
@@ -45,12 +43,12 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 		Text:     fmt.Sprintf("**[%s](%s)**", info.Title, info.Alternate),
 		ThumbURL: info.Icon,
 		Fields: []*model.SlackAttachmentField{
-			&model.SlackAttachmentField{
+			{
 				Title: "Author",
 				Value: info.AuthorName,
 				Short: true,
 			},
-			&model.SlackAttachmentField{
+			{
 				Title: "Generator",
 				Value: info.Generator,
 				Short: true,
@@ -62,18 +60,20 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 
 }
 
-func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
-	currentSubscriptions, err := p.getSubscriptions()
+func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) error {
+	currentSubscriptions, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return err
 	}
 
+	key := sub.URL
+
 	// check if url already exists
 	_, ok := currentSubscriptions.Subscriptions[key]
 	if !ok {
 		currentSubscriptions.Subscriptions[key] = sub
-		err = p.storeSubscriptions(currentSubscriptions)
+		err = p.storeSubscriptions(channelID, currentSubscriptions)
 		if err != nil {
 			p.API.LogError(err.Error())
 			return err
@@ -86,10 +86,10 @@ func (p *RSSFeedPlugin) addSubscription(key string, sub *Subscription) error {
 	return nil
 }
 
-func (p *RSSFeedPlugin) getSubscriptions() (*Subscriptions, error) {
+func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, error) {
 	var subscriptions *Subscriptions
 
-	value, err := p.API.KVGet(SUBSCRIPTIONS_KEY)
+	value, err := p.API.KVGet(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return nil, err
@@ -104,20 +104,20 @@ func (p *RSSFeedPlugin) getSubscriptions() (*Subscriptions, error) {
 	return subscriptions, nil
 }
 
-func (p *RSSFeedPlugin) storeSubscriptions(s *Subscriptions) error {
+func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *Subscriptions) error {
 	b, err := json.Marshal(s)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return err
 	}
 
-	p.API.KVSet(SUBSCRIPTIONS_KEY, b)
+	p.API.KVSet(channelID, b)
 	return nil
 }
 
 func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription, error) {
 
-	currentSubscriptions, err := p.getSubscriptions()
+	currentSubscriptions, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return nil, err
@@ -125,12 +125,12 @@ func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription
 
 	subClone := &Subscription{}
 
-	key := getKey(channelID, url)
+	key := url
 	sub, ok := currentSubscriptions.Subscriptions[key]
 	if ok {
 		*subClone = *sub
 		delete(currentSubscriptions.Subscriptions, key)
-		if err := p.storeSubscriptions(currentSubscriptions); err != nil {
+		if err := p.storeSubscriptions(channelID, currentSubscriptions); err != nil {
 			p.API.LogError(err.Error())
 			return nil, err
 		}
@@ -141,25 +141,21 @@ func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription
 	return nil, errors.New("not subscribed")
 }
 
-func (p *RSSFeedPlugin) updateSubscription(subscription *Subscription) error {
-	currentSubscriptions, err := p.getSubscriptions()
+func (p *RSSFeedPlugin) updateSubscription(channelID string, subscription *Subscription) error {
+	currentSubscriptions, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return err
 	}
 
-	key := getKey(subscription.ChannelID, subscription.URL)
+	key := subscription.URL
 	_, ok := currentSubscriptions.Subscriptions[key]
 	if ok {
 		currentSubscriptions.Subscriptions[key] = subscription
-		if err := p.storeSubscriptions(currentSubscriptions); err != nil {
+		if err := p.storeSubscriptions(channelID, currentSubscriptions); err != nil {
 			p.API.LogError(err.Error())
 			return err
 		}
 	}
 	return nil
-}
-
-func getKey(channelID string, url string) string {
-	return fmt.Sprintf("%s/%s", channelID, url)
 }
