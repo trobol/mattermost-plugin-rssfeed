@@ -23,6 +23,7 @@ type Subscription struct {
 	ETag      string
 	Format    SubscriptionFormat
 	Title     string
+	Color     string
 }
 
 type SubscriptionInfo struct {

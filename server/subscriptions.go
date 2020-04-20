@@ -20,8 +20,9 @@ type Subscriptions struct {
 // Subscribe prosses the /feed subscribe <channel> <url>
 func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) {
 	sub := &Subscription{
-		URL: url,
-		XML: "",
+		URL:   url,
+		XML:   "",
+		Color: hashColor(url),
 	}
 
 	info, err := sub.FetchInfo()
@@ -33,6 +34,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 	}
 
 	sub.Title = info.Title
+	sub.Format = info.Format
 
 	if err := p.addSubscription(channelID, sub); err != nil {
 		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
@@ -42,6 +44,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 	attachment := &model.SlackAttachment{
 		Text:     fmt.Sprintf("**[%s](%s)**", info.Title, info.Alternate),
 		ThumbURL: info.Icon,
+		Color:    sub.Color,
 		Fields: []*model.SlackAttachmentField{
 			{
 				Title: "Author",

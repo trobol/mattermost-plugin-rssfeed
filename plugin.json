@@ -39,6 +39,12 @@
                 "help_text": "Control whether new items from the same feed will be grouped into one message"
             },
             {
+                "key": "SortMessages",
+                "display_name": "Sort Messages",
+                "type": "bool",
+                "help_text": "Sort messages by date"
+            },
+            {
                 "key": "GravatarDefault",
                 "display_name": "Gravatar Default Icon",
                 "type": "dropdown",

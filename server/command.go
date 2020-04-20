@@ -128,9 +128,8 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 			return getCommandResponse(private, err.Error()), nil
 		}
 
-		key := url
-		subscription := subscriptions.Subscriptions[key]
-		if subscription != nil {
+		subscription, ok := subscriptions.Subscriptions[url]
+		if ok {
 			go p.processSubscription(args.ChannelId, subscription)
 			return getCommandResponse(normal, "Fetching "+url), nil
 		} else {

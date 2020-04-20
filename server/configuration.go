@@ -23,6 +23,7 @@ type configuration struct {
 	ShowDescription      bool
 	HideSubscribeMessage bool
 	GroupMessages        bool
+	SortMessages         bool
 	GravatarDefault      string
 	GravatarCustom       string
 	disabled             bool
