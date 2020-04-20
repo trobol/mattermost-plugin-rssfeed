@@ -7,8 +7,10 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"io/ioutil"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -119,6 +121,7 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 	attachments, err := p.processFeed(subscription)
 
 	if err != nil {
+		p.API.LogError(err.Error())
 		return err
 	}
 
@@ -126,11 +129,18 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 		return nil
 	}
 
+	if config.SortMessages {
+		sort.Slice(attachments, func(i, j int) bool {
+			return attachments[i].Timestamp.(int64) < attachments[j].Timestamp.(int64)
+		})
+	}
+
 	//Send as separate messages or group as few messages as possible
 	var groupedAttachments [][]*model.SlackAttachment
 	if config.GroupMessages {
 		groupedAttachments, err = p.groupAttachments(attachments)
 		if err != nil {
+			p.API.LogError(err.Error())
 			return err
 		}
 	} else {
@@ -164,15 +174,22 @@ func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackA
 	decoder := xml.NewDecoder(strings.NewReader(body))
 	decoder.CharsetReader = charset.NewReaderLabel
 
-	rssFeed, err := RSSV2ParseString(body)
+	if subscription.Format == FEED_FORMAT_RSSV2 {
+		rssFeed, err := RSSV2ParseString(body)
 
-	if err == nil {
+		if err != nil {
+			return nil, err
+		}
 		return p.processRSSV2Subscription(subscription, rssFeed, body)
+
 	}
 
-	atomFeed, err := AtomParseString(body)
+	if subscription.Format == FEED_FORMAT_ATOM {
+		atomFeed, err := AtomParseString(body)
 
-	if err == nil {
+		if err != nil {
+			return nil, err
+		}
 		return p.processAtomSubscription(subscription, atomFeed)
 	}
 
@@ -231,6 +248,7 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed
 			AuthorName: item.Author.Name,
 			AuthorLink: item.Author.URI,
 			AuthorIcon: getGravatarIcon(item.Author.Email, config.GravatarDefault),
+			Color:      subscription.Color,
 		}
 
 		attachments[index] = attachment
@@ -242,9 +260,9 @@ func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed
 
 		//timestamp field currently unused by mattermost
 		if item.Published != "" {
-			attachment.Timestamp = string(item.Published)
+			attachment.Timestamp = AtomParseTimestamp(item.Published)
 		} else {
-			attachment.Timestamp = string(item.Updated)
+			attachment.Timestamp = AtomParseTimestamp(item.Updated)
 		}
 
 		if item.Content != nil {
@@ -354,4 +372,13 @@ func getGravatarIcon(email string, defaultIcon string) string {
 		hash = hex.EncodeToString(sum[:])
 	}
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?d=%s&s40", hash, defaultIcon)
+}
+
+func hashColor(s string) string {
+
+	hash := fnv.New32()
+	hash.Write([]byte(s))
+	color := fmt.Sprintf("#%x", hash.Sum32())
+	return color[:7]
+
 }
