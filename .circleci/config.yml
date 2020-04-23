@@ -59,18 +59,31 @@ jobs:
           destination: raw-lint-output
       - store_test_results: # Upload test results for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
               path: /tmp/lint-results/
+  
 
 workflows:
   ci-build:
     jobs:
-      - lint
-      - test 
-      - plugin-ci/deploy-release-github:
-          type: approval
+      - lint:
+          filters:
+                tags:
+                  only: /^v\d+\.\d+\.\d+$/
+      - test:
+          filters:
+              tags:
+                only: /^v\d+\.\d+\.\d+$/
+      - plugin-ci/build:
           requires:
             - lint
             - test
           filters:
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
+      - plugin-ci/deploy-release-github:
+          requires:
+            - plugin-ci/build
+          filters:
             branches:
-              only: master
-    
+              ignore: /.*/
+            tags:
+              only: /^v\d+\.\d+\.\d+$/
