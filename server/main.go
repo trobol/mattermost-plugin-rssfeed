@@ -5,5 +5,7 @@ import (
 )
 
 func main() {
-	plugin.ClientMain(&RSSFeedPlugin{})
+	plugin.ClientMain(&RSSFeedPlugin{
+		FeedHandler: newFeedHandler(),
+	})
 }

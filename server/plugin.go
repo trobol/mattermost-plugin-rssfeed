@@ -4,8 +4,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"encoding/xml"
-	"errors"
 	"fmt"
 	"hash/fnv"
 	"io/ioutil"
@@ -17,10 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/lunny/html2md"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
-	"golang.org/x/net/html/charset"
 )
 
 //const RSSFEED_ICON_URL = "./plugins/rssfeed/assets/rss.png"
@@ -38,6 +34,8 @@ type RSSFeedPlugin struct {
 
 	botUserID            string
 	processHeartBeatFlag bool
+
+	FeedHandler
 }
 
 // ServeHTTP hook from mattermost plugin
@@ -118,7 +116,7 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subscription) error {
 	config := p.getConfiguration()
 
-	attachments, err := p.processFeed(subscription)
+	attachments, err := p.processFeed(subscription, config)
 
 	if err != nil {
 		p.API.LogError(err.Error())
@@ -154,135 +152,6 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 
 	p.updateSubscription(channelID, subscription)
 	return nil
-}
-
-func (p *RSSFeedPlugin) processFeed(subscription *Subscription) ([]*model.SlackAttachment, error) {
-
-	if len(subscription.URL) == 0 {
-		return nil, errors.New("no url supplied")
-	}
-
-	body, err := subscription.FetchBody()
-
-	if err != nil {
-		return nil, err
-	}
-	if body == "" {
-		return nil, nil
-	}
-
-	decoder := xml.NewDecoder(strings.NewReader(body))
-	decoder.CharsetReader = charset.NewReaderLabel
-
-	if subscription.Format == FEED_FORMAT_RSSV2 {
-		rssFeed, err := RSSV2ParseString(body)
-
-		if err != nil {
-			return nil, err
-		}
-		return p.processRSSV2Subscription(subscription, rssFeed, body)
-
-	}
-
-	if subscription.Format == FEED_FORMAT_ATOM {
-		atomFeed, err := AtomParseString(body)
-
-		if err != nil {
-			return nil, err
-		}
-		return p.processAtomSubscription(subscription, atomFeed)
-	}
-
-	return nil, errors.New("invalid feed format")
-}
-
-func (p *RSSFeedPlugin) processRSSV2Subscription(subscription *Subscription, newRssFeed *RSSV2, newRssFeedString string) ([]*model.SlackAttachment, error) {
-	config := p.getConfiguration()
-
-	// retrieve old xml feed from database
-	oldRssFeed, err := RSSV2ParseString(subscription.XML)
-	if err != nil {
-		return nil, err
-	}
-
-	items := RSSV2CompareItemsBetweenOldAndNew(oldRssFeed, newRssFeed)
-	attachments := make([]*model.SlackAttachment, len(items))
-	for index, item := range items {
-		attachment := &model.SlackAttachment{
-			Title:     item.Title,
-			TitleLink: item.Link,
-		}
-
-		if config.ShowDescription {
-			attachment.Text = html2md.Convert(item.Description)
-		}
-		attachments[index] = attachment
-	}
-	if len(items) > 0 {
-		subscription.XML = newRssFeedString
-	}
-
-	subscription.Timestamp = time.Now().Unix()
-
-	return attachments, nil
-}
-
-func (p *RSSFeedPlugin) processAtomSubscription(subscription *Subscription, feed *AtomFeed) ([]*model.SlackAttachment, error) {
-
-	config := p.getConfiguration()
-
-	feedTimestamp := AtomParseTimestamp(feed.Updated)
-
-	if subscription.Timestamp >= AtomParseTimestamp(feed.Updated) {
-		return nil, nil
-	}
-
-	items := feed.ItemsAfter(subscription.Timestamp)
-
-	attachments := make([]*model.SlackAttachment, len(items))
-
-	for index, item := range items {
-		attachment := &model.SlackAttachment{
-			Title:      item.Title,
-			Fallback:   item.Title,
-			AuthorName: item.Author.Name,
-			AuthorLink: item.Author.URI,
-			AuthorIcon: getGravatarIcon(item.Author.Email, config.GravatarDefault),
-			Color:      subscription.Color,
-		}
-
-		attachments[index] = attachment
-		for _, link := range item.Link {
-			if link.Rel == "alternate" {
-				attachment.TitleLink = link.Href
-			}
-		}
-
-		//timestamp field currently unused by mattermost
-		if item.Published != "" {
-			attachment.Timestamp = AtomParseTimestamp(item.Published)
-		} else {
-			attachment.Timestamp = AtomParseTimestamp(item.Updated)
-		}
-
-		if item.Content != nil {
-			body := attachment.Text
-			if item.Content.Type != "text" {
-				body = html2md.Convert(body)
-			}
-			attachment.Text = strings.TrimSpace(body)
-
-		} else {
-			p.API.LogInfo("Missing content in atom feed item",
-				"subscription_url", subscription.URL,
-				"item_title", item.Title)
-		}
-
-	}
-
-	subscription.Timestamp = feedTimestamp
-
-	return attachments, nil
 }
 
 // number of characters Json encoded array of slack attachments must be smaller than POST_PROPS_MAX_USER_RUNES
