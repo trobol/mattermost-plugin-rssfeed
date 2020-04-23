@@ -6,38 +6,69 @@ orbs:
 commands:
   run-test: plugin-ci/test
 
+aliases:
+- &restore_cache
+  restore_cache:
+    key: go-mod-v1-{{ checksum "go.sum" }}
+- &save_cache
+  save_cache:
+    key: go-mod-v1-{{ checksum "go.sum" }}
+    paths:
+    - "/go/pkg/mod"
+
 jobs:
   
   test:
-    environment: # environment variables for the build itself
-      TEST_RESULTS: /tmp/test-results/gotestsum # path to where test results will be saved
-      GOTESTSUM_JUNITFILE: /tmp/test-results/gotestsum/results.xml # path to where test results will be saved
+    environment: 
+      GOTESTSUM_JUNITFILE: /tmp/test-results/gotestsum.xml # path to where test result will be saved
     executor: plugin-ci/default
     steps:
       - checkout
-      - run: mkdir -p $TEST_RESULTS # create the test results directory
-      - restore_cache:
-          key: 'go-mod-v1-{{ checksum "go.sum" }}'
+      - run: mkdir -p /tmp/test-results/ # create the test results directory
+      - *restore_cache
       - run: make test
-      - save_cache:
-          key: 'go-mod-v1-{{ checksum "go.sum" }}'
-          paths:
-            - /go/pkg/mod
+      - *save_cache
       - store_artifacts: # Upload test summary for display in Artifacts: https://circleci.com/docs/2.0/artifacts/
           path: /tmp/test-results
           destination: raw-test-output
       - store_test_results: # Upload test results for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
               path: /tmp/test-results/
-  
+  lint:
+    executor:
+      name: plugin-ci/default
+    environment:
+      LINT_DIRECTORY: /tmp/lint-results/
+    steps:
+      - checkout
+      - plugin-ci/install-golangci-lint
+      - run: mkdir -p $LINT_DIRECTORY
+      - *restore_cache
+      - run:
+          name: Checking code style
+          command: |
+            golangci-lint run --out-format junit-xml ./... > ${LINT_DIRECTORY}/golangci-lint.xml
+      - run: go mod tidy -v
+      - run:
+          name: Check git diff
+          command: |
+            git --no-pager diff --exit-code go.mod go.sum
+          when: always
+      - *save_cache
+      - store_artifacts: # Upload test summary for display in Artifacts: https://circleci.com/docs/2.0/artifacts/
+          path: /tmp/lint-results
+          destination: raw-lint-output
+      - store_test_results: # Upload test results for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
+              path: /tmp/lint-results/
+
 workflows:
   ci-build:
     jobs:
-      - plugin-ci/lint
+      - lint
       - test 
       - plugin-ci/deploy-release-github:
           type: approval
           requires:
-            - plugin-ci/lint
+            - lint
             - test
           filters:
             branches:
