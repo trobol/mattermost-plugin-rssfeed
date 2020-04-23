@@ -57,7 +57,7 @@ golangci-lint:
 	fi; \
 
 	@echo Running golangci-lint
-	golangci-lint run ./...
+	golangci-lint run $(GO_LINT_FLAGS) ./... 
 
 
 ## Builds the server, if it exists, including support for multiple architectures.
