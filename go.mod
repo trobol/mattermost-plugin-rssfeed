@@ -3,6 +3,7 @@ module github.com/wbernest/mattermost-plugin-rssfeed
 go 1.12
 
 require (
+	github.com/blang/semver v3.5.1+incompatible
 	github.com/go-ldap/ldap v3.0.3+incompatible // indirect
 	github.com/hashicorp/go-hclog v0.9.2 // indirect
 	github.com/hashicorp/go-plugin v1.0.1 // indirect

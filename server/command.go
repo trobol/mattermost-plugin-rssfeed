@@ -12,8 +12,8 @@ import (
 	"github.com/mattermost/mattermost-server/plugin"
 )
 
-// COMMAND_HELP is the text you see when you type /feed help
-const COMMAND_HELP = `* |/feed subscribe [url]| - Connect your Mattermost channel to an rss feed 
+// CommandHelp is the text you see when you type /feed help
+const CommandHelp = `* |/feed subscribe [url]| - Connect your Mattermost channel to an rss feed 
 * |/feed list| - Lists the rss feeds you have subscribed to
 * |/feed unsubscribe [url]| - Unsubscribes the Mattermost channel from the rss feed
 * |/feed fetch [url]| - Fetches the latest content from the rss feed`
@@ -36,14 +36,13 @@ func getCommandResponse(responseType, text string) *model.CommandResponse {
 		ResponseType: responseType,
 		Text:         text,
 		Username:     botDisplayName,
-		IconURL:      RSSFEED_ICON_URL,
+		IconURL:      RSSFeedIconURL,
 		Type:         model.POST_DEFAULT,
 	}
 }
 
 // ExecuteCommand will execute commands ...
 func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
-
 	config := p.getConfiguration()
 	split := strings.Fields(args.Command)
 	command := split[0]
@@ -81,7 +80,7 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		return getCommandResponse(private, txt), nil
 	case "subscribe", "sub":
 
-		url, err := parseUrlParam(&parameters)
+		url, err := parseURLParam(&parameters)
 
 		if err != nil {
 			return getCommandResponse(private, fmt.Sprintf("Invalid arguments %s.", err.Error())), nil
@@ -105,7 +104,7 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		return getCommandResponse(private, fmt.Sprintf("Attempting to Subscribed to %s", url)), nil
 	case "unsubscribe", "unsub":
 
-		url, err := parseUrlParam(&parameters)
+		url, err := parseURLParam(&parameters)
 
 		if err != nil {
 			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
@@ -117,7 +116,7 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 
 		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", sub.Title, url)), nil
 	case "fetch":
-		url, err := parseUrlParam(&parameters)
+		url, err := parseURLParam(&parameters)
 
 		if err != nil {
 			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
@@ -132,19 +131,19 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		if ok {
 			go p.processSubscription(args.ChannelId, subscription)
 			return getCommandResponse(normal, "Fetching "+url), nil
-		} else {
-			return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
 		}
+		return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
+
 	case "help":
-		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
+		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(CommandHelp, "|", "`", -1)
 		return getCommandResponse(private, text), nil
 	default:
-		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(COMMAND_HELP, "|", "`", -1)
+		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(CommandHelp, "|", "`", -1)
 		return getCommandResponse(private, text), nil
 	}
 }
 
-func parseUrlParam(parameters *[]string) (string, error) {
+func parseURLParam(parameters *[]string) (string, error) {
 	if len(*parameters) == 0 {
 		return "", errors.New("url not specified")
 	} else if len(*parameters) > 1 {
@@ -153,7 +152,7 @@ func parseUrlParam(parameters *[]string) (string, error) {
 
 	url := (*parameters)[0]
 
-	if !IsUrl(url) {
+	if !IsURL(url) {
 		return "", errors.New("url invalid")
 	}
 
@@ -161,7 +160,7 @@ func parseUrlParam(parameters *[]string) (string, error) {
 }
 
 //thanks to https://stackoverflow.com/a/55551215/8781351
-func IsUrl(str string) bool {
+func IsURL(str string) bool {
 	u, err := URL.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
 }

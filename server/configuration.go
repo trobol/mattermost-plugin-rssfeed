@@ -94,3 +94,11 @@ func (p *RSSFeedPlugin) OnConfigurationChange() error {
 
 	return nil
 }
+
+// setEnabled wraps setConfiguration to configure if the plugin is enabled.
+func (p *RSSFeedPlugin) setEnabled(enabled bool) {
+	var configuration = p.getConfiguration().Clone()
+	configuration.disabled = !enabled
+
+	p.setConfiguration(configuration)
+}

@@ -1,7 +1,7 @@
 package main
 
 import (
-	"crypto/md5"
+	"crypto/md5" //nolint comments
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,11 +15,13 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/blang/semver"
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
+	"github.com/pkg/errors"
 )
 
-//const RSSFEED_ICON_URL = "./plugins/rssfeed/assets/rss.png"
+//const RSSFeedIconURL = "./plugins/rssfeed/assets/rss.png"
 
 // RSSFeedPlugin Object
 type RSSFeedPlugin struct {
@@ -45,10 +47,16 @@ func (p *RSSFeedPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *h
 		data, err := ioutil.ReadFile(string("plugins/rssfeed/assets/rss.png"))
 		if err == nil {
 			w.Header().Set("Content-Type", "image/png")
-			w.Write(data)
+			_, writeErr := w.Write(data)
+			if writeErr != nil {
+				p.API.LogError(writeErr.Error())
+			}
 		} else {
 			w.WriteHeader(404)
-			w.Write([]byte("404 Something went wrong - " + http.StatusText(404)))
+			_, writeErr := w.Write([]byte("404 Something went wrong - " + http.StatusText(404)))
+			if writeErr != nil {
+				p.API.LogError(err.Error())
+			}
 			p.API.LogInfo("/images/rss.png err = ", err.Error())
 		}
 	default:
@@ -69,14 +77,12 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 		err := p.processHeartBeat()
 		if err != nil {
 			p.API.LogError(err.Error())
-
 		}
 		time.Sleep(time.Duration(heartbeatTime) * time.Minute)
 	}
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
-
 	keys, err := p.API.KVList(0, 50)
 
 	if err != nil {
@@ -89,10 +95,7 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 		}
 
 		for _, value := range dictionaryOfSubscriptions.Subscriptions {
-			err := p.processSubscription(key, value)
-			if err != nil {
-				p.API.LogError(err.Error())
-			}
+			p.processSubscription(key, value)
 		}
 	}
 
@@ -113,18 +116,18 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 	return heartbeatTime, nil
 }
 
-func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subscription) error {
+func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subscription) {
 	config := p.getConfiguration()
 
 	attachments, err := p.processFeed(subscription, config)
 
 	if err != nil {
 		p.API.LogError(err.Error())
-		return err
+		return
 	}
 
 	if attachments == nil {
-		return nil
+		return
 	}
 
 	if config.SortMessages {
@@ -139,24 +142,37 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 		groupedAttachments, err = p.groupAttachments(attachments)
 		if err != nil {
 			p.API.LogError(err.Error())
-			return err
+			return
 		}
 	} else {
 		groupedAttachments = p.padAttachments(attachments)
 	}
 
 	for _, group := range groupedAttachments {
-
 		p.createBotPost("", group, channelID, model.POST_DEFAULT)
 	}
 
-	p.updateSubscription(channelID, subscription)
+	if err := p.updateSubscription(channelID, subscription); err != nil {
+		p.API.LogError(err.Error())
+	}
+}
+
+func (p *RSSFeedPlugin) checkServerVersion() error {
+	serverVersion, err := semver.Parse(p.API.GetServerVersion())
+	if err != nil {
+		return errors.Wrap(err, "failed to parse server version")
+	}
+
+	r := semver.MustParseRange(">=" + minimumServerVersion)
+	if !r(serverVersion) {
+		return fmt.Errorf("this plugin requires Mattermost v%s or later", minimumServerVersion)
+	}
+
 	return nil
 }
 
 // number of characters Json encoded array of slack attachments must be smaller than POST_PROPS_MAX_USER_RUNES
 func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) ([][]*model.SlackAttachment, error) {
-
 	start := 0
 	size := 2
 
@@ -180,7 +196,6 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 		}
 
 		if encodedSize > model.POST_PROPS_MAX_USER_RUNES {
-
 			//single attachment is too long, trim then add
 			diff := encodedSize - model.POST_PROPS_MAX_USER_RUNES
 			textOffset := len(attachment.Text) - diff
@@ -195,7 +210,6 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 			}
 			start = end + 1
 		}
-
 	}
 	if start < len(attachments) {
 		groupedAttachments = append(groupedAttachments, attachments[start:])
@@ -213,8 +227,7 @@ func (p *RSSFeedPlugin) padAttachments(attachments []*model.SlackAttachment) [][
 	return result
 }
 
-func (p *RSSFeedPlugin) createBotPost(msg string, attachments []*model.SlackAttachment, channelID string, postType string) error {
-
+func (p *RSSFeedPlugin) createBotPost(msg string, attachments []*model.SlackAttachment, channelID string, postType string) {
 	post := &model.Post{
 		UserId:    p.botUserID,
 		ChannelId: channelID,
@@ -226,10 +239,7 @@ func (p *RSSFeedPlugin) createBotPost(msg string, attachments []*model.SlackAtta
 
 	if _, err := p.API.CreatePost(post); err != nil {
 		p.API.LogError(err.Error())
-		return err
 	}
-
-	return nil
 }
 
 func getGravatarIcon(email string, defaultIcon string) string {
@@ -237,17 +247,18 @@ func getGravatarIcon(email string, defaultIcon string) string {
 	if email == "" {
 		hash = "00000000000000000000000000000000"
 	} else {
-		sum := md5.Sum([]byte(strings.TrimSpace(email)))
+		sum := md5.Sum([]byte(strings.TrimSpace(email))) //nolint comments
 		hash = hex.EncodeToString(sum[:])
 	}
 	return fmt.Sprintf("https://www.gravatar.com/avatar/%s?d=%s&s40", hash, defaultIcon)
 }
 
 func hashColor(s string) string {
-
 	hash := fnv.New32()
-	hash.Write([]byte(s))
+	_, err := hash.Write([]byte(s))
+	if err != nil {
+		return "ffffff"
+	}
 	color := fmt.Sprintf("#%x", hash.Sum32())
 	return color[:7]
-
 }

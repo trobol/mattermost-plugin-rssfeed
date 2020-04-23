@@ -1,32 +1,41 @@
 package main
 
 import (
-	"github.com/mattermost/mattermost-server/model"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
+
+	"github.com/mattermost/mattermost-server/model"
+	"github.com/pkg/errors"
 )
 
 const minimumServerVersion = "5.10.0"
 const botName = "rssfeedbot"
 const botDisplayName = "RSSFeed Plugin"
-const RSSFEED_ICON_URL = "https://mattermost.gridprotectionalliance.org/plugins/rssfeed/images/rss.png"
+const RSSFeedIconURL = "https://mattermost.gridprotectionalliance.org/plugins/rssfeed/images/rss.png"
 
 func (p *RSSFeedPlugin) OnActivate() error {
+	if err := p.checkServerVersion(); err != nil {
+		return err
+	}
 	_, err := p.ensureBotExists()
 	if err != nil {
 		p.API.LogError("Failed to find "+botDisplayName+" user", "err", err)
 		return err
 	}
 
-	p.API.RegisterCommand(getCommand())
+	if err := p.API.RegisterCommand(getCommand()); err != nil {
+		return errors.Wrap(err, "failed to register commands")
+	}
 	p.processHeartBeatFlag = true
 	go p.setupHeartBeat()
+
+	p.API.LogDebug(fmt.Sprintf("Activated %s version %s", manifest.ID, manifest.Version))
 
 	return nil
 }
 
 func (p *RSSFeedPlugin) OnDeactivate() error {
-
 	p.processHeartBeatFlag = false
 	return nil
 }
