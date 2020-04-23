@@ -12,6 +12,17 @@ import (
 
 const SUBSCRIPTIONS_KEY = "subscriptions"
 
+// Subscription Object
+type Subscription struct {
+	URL       string
+	XML       string
+	Timestamp int64
+	ETag      string
+	Format    FeedFormat
+	Title     string
+	Color     string
+}
+
 // Subscriptions map to key value pairs
 type Subscriptions struct {
 	Subscriptions map[string]*Subscription
@@ -25,7 +36,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 		Color: hashColor(url),
 	}
 
-	info, err := sub.FetchInfo()
+	info, err := p.FetchFeedInfo(url)
 
 	if err != nil {
 		p.API.LogError(err.Error())
