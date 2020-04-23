@@ -10,8 +10,6 @@ import (
 	"github.com/mattermost/mattermost-server/model"
 )
 
-const SUBSCRIPTIONS_KEY = "subscriptions"
-
 // Subscription Object
 type Subscription struct {
 	URL       string
@@ -71,7 +69,6 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 	}
 
 	p.createBotPost("Subscribed to:", []*model.SlackAttachment{attachment}, channelID, model.POST_DEFAULT)
-
 }
 
 func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) error {
@@ -92,12 +89,8 @@ func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) err
 			p.API.LogError(err.Error())
 			return err
 		}
-
-	} else {
-		return errors.New("this channel is already subscribed to that feed")
 	}
-
-	return nil
+	return errors.New("this channel is already subscribed to that feed")
 }
 
 func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, error) {
@@ -112,7 +105,10 @@ func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, erro
 	if value == nil {
 		subscriptions = &Subscriptions{Subscriptions: map[string]*Subscription{}}
 	} else {
-		json.NewDecoder(bytes.NewReader(value)).Decode(&subscriptions)
+		err := json.NewDecoder(bytes.NewReader(value)).Decode(&subscriptions)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return subscriptions, nil
@@ -125,12 +121,14 @@ func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *Subscriptions) e
 		return err
 	}
 
-	p.API.KVSet(channelID, b)
+	if err := p.API.KVSet(channelID, b); err != nil {
+		p.API.LogError(err.Error())
+		return err
+	}
 	return nil
 }
 
 func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription, error) {
-
 	currentSubscriptions, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())

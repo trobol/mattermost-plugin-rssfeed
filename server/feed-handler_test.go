@@ -6,7 +6,7 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-type HttpClientMock struct {
+type HTTPClientMock struct {
 	mock.Mock
 }
 
@@ -35,13 +35,9 @@ var responses = [...]ResponseMock{
 }
 
 func TestFetchInfo(t *testing.T) {
-
 	for _, response := range responses {
-
-		mockClient := new(HttpClientMock)
+		mockClient := new(HTTPClientMock)
 
 		mockClient.On("Do", mock.Anything).Return(response)
-
 	}
-
 }

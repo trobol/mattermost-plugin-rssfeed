@@ -238,37 +238,6 @@ func RSSV2ParseString(s string) (*RSSV2, error) {
 	return &rss, nil
 }
 
-// RSSV2CompareItems - This function will used to compare 2 RSS xml item objects
-// and will return a list of differing items
-func RSSV2CompareItems(firstRSS *RSSV2, secondRSS *RSSV2) []Item {
-	biggerRSS := firstRSS
-	smallerRSS := secondRSS
-	itemList := []Item{}
-	if len(secondRSS.Channel.ItemList) > len(firstRSS.Channel.ItemList) {
-		biggerRSS = secondRSS
-		smallerRSS = firstRSS
-	} else if len(secondRSS.Channel.ItemList) == len(firstRSS.Channel.ItemList) {
-		return itemList
-	}
-
-	for _, item1 := range biggerRSS.Channel.ItemList {
-		exists := false
-		for _, item2 := range smallerRSS.Channel.ItemList {
-			if len(item1.GUID) > 0 && item1.GUID == item2.GUID {
-				exists = true
-				break
-			} else if item1.PubDate == item2.PubDate && item1.Title == item2.Title {
-				exists = true
-				break
-			}
-		}
-		if !exists {
-			itemList = append(itemList, item1)
-		}
-	}
-	return itemList
-}
-
 // RSSV2CompareItemsBetweenOldAndNew - This function will used to compare 2 RSS xml item objects
 // and will return a list of items that are specifically in the newer feed but not in
 // the older feed

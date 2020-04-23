@@ -17,9 +17,8 @@ import (
 type FeedFormat int8
 
 const (
-	FEED_FORMAT_UNKNOWN FeedFormat = 0
-	FEED_FORMAT_RSSV2   FeedFormat = 1
-	FEED_FORMAT_ATOM    FeedFormat = 2
+	FeedFormatRSSV2 FeedFormat = 1
+	FeedFormatAtom  FeedFormat = 2
 )
 
 type FeedInfo struct {
@@ -41,13 +40,15 @@ type FeedHandler interface {
 	FetchFeedBody(subs *Subscription) (string, error)
 }
 
-type HttpClient interface {
+type HTTPClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
 type FeedHandlerDefault struct {
-	client HttpClient
+	client HTTPClient
 }
+
+const RelAlternate = "alternate"
 
 func newFeedHandler() FeedHandler {
 	//src: https://blog.cloudflare.com/the-complete-guide-to-golang-net-http-timeouts/
@@ -67,7 +68,6 @@ func newFeedHandler() FeedHandler {
 }
 
 func (h FeedHandlerDefault) processFeed(subscription *Subscription, config *configuration) ([]*model.SlackAttachment, error) {
-
 	if len(subscription.URL) == 0 {
 		return nil, errors.New("no url supplied")
 	}
@@ -84,17 +84,16 @@ func (h FeedHandlerDefault) processFeed(subscription *Subscription, config *conf
 	decoder := xml.NewDecoder(strings.NewReader(body))
 	decoder.CharsetReader = charset.NewReaderLabel
 
-	if subscription.Format == FEED_FORMAT_RSSV2 {
+	if subscription.Format == FeedFormatRSSV2 {
 		rssFeed, err := RSSV2ParseString(body)
 
 		if err != nil {
 			return nil, err
 		}
 		return h.processRSSV2Feed(subscription, rssFeed, body, config)
-
 	}
 
-	if subscription.Format == FEED_FORMAT_ATOM {
+	if subscription.Format == FeedFormatAtom {
 		atomFeed, err := AtomParseString(body)
 
 		if err != nil {
@@ -107,7 +106,6 @@ func (h FeedHandlerDefault) processFeed(subscription *Subscription, config *conf
 }
 
 func (h FeedHandlerDefault) processRSSV2Feed(subscription *Subscription, newRssFeed *RSSV2, newRssFeedString string, config *configuration) ([]*model.SlackAttachment, error) {
-
 	// retrieve old xml feed from database
 	oldRssFeed, err := RSSV2ParseString(subscription.XML)
 	if err != nil {
@@ -137,7 +135,6 @@ func (h FeedHandlerDefault) processRSSV2Feed(subscription *Subscription, newRssF
 }
 
 func (h FeedHandlerDefault) processAtomFeed(subscription *Subscription, feed *AtomFeed, config *configuration) ([]*model.SlackAttachment, error) {
-
 	feedTimestamp := AtomParseTimestamp(feed.Updated)
 
 	if subscription.Timestamp >= AtomParseTimestamp(feed.Updated) {
@@ -160,7 +157,7 @@ func (h FeedHandlerDefault) processAtomFeed(subscription *Subscription, feed *At
 
 		attachments[index] = attachment
 		for _, link := range item.Link {
-			if link.Rel == "alternate" {
+			if link.Rel == RelAlternate {
 				attachment.TitleLink = link.Href
 			}
 		}
@@ -178,9 +175,7 @@ func (h FeedHandlerDefault) processAtomFeed(subscription *Subscription, feed *At
 				body = html2md.Convert(body)
 			}
 			attachment.Text = strings.TrimSpace(body)
-
 		}
-
 	}
 
 	subscription.Timestamp = feedTimestamp
@@ -189,7 +184,6 @@ func (h FeedHandlerDefault) processAtomFeed(subscription *Subscription, feed *At
 }
 
 func (h FeedHandlerDefault) FetchFeedBody(sub *Subscription) (string, error) {
-
 	req, err := http.NewRequest("GET", sub.URL, nil)
 
 	if err != nil {
@@ -199,11 +193,9 @@ func (h FeedHandlerDefault) FetchFeedBody(sub *Subscription) (string, error) {
 	req.Header.Add("If-None-Match", sub.ETag)
 
 	return h.fetchRequest(req)
-
 }
 
 func (h FeedHandlerDefault) fetchRequest(req *http.Request) (string, error) {
-
 	resp, err := h.client.Do(req)
 	if err != nil {
 		return "", err
@@ -226,7 +218,6 @@ func (h FeedHandlerDefault) fetchRequest(req *http.Request) (string, error) {
 }
 
 func (h FeedHandlerDefault) FetchFeedInfo(url string) (*FeedInfo, error) {
-
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -242,7 +233,7 @@ func (h FeedHandlerDefault) FetchFeedInfo(url string) (*FeedInfo, error) {
 	if err == nil {
 		info := &FeedInfo{
 			Title:      atomFeed.Title,
-			Format:     FEED_FORMAT_ATOM,
+			Format:     FeedFormatAtom,
 			AuthorName: atomFeed.Author.Name,
 			AuthorURL:  atomFeed.Author.URI,
 			Icon:       atomFeed.Icon,
@@ -250,7 +241,7 @@ func (h FeedHandlerDefault) FetchFeedInfo(url string) (*FeedInfo, error) {
 		}
 
 		for _, link := range atomFeed.Link {
-			if link.Rel == "alternate" {
+			if link.Rel == RelAlternate {
 				info.Alternate = link.Href
 				break
 			}
@@ -264,12 +255,11 @@ func (h FeedHandlerDefault) FetchFeedInfo(url string) (*FeedInfo, error) {
 	if err == nil {
 		info := &FeedInfo{
 			Title:  rssFeed.Channel.Title,
-			Format: FEED_FORMAT_RSSV2,
+			Format: FeedFormatRSSV2,
 		}
 
 		return info, nil
 	}
 
 	return nil, errors.New("invalid feed")
-
 }
