@@ -3,8 +3,43 @@ version: 2.1
 orbs:
   plugin-ci: mattermost/plugin-ci@0.1.0
 
+commands:
+  run-test: plugin-ci/test
+
+jobs:
+  
+  test:
+    environment: # environment variables for the build itself
+      TEST_RESULTS: /tmp/test-results/gotestsum # path to where test results will be saved
+      GOTESTSUM_JUNITFILE: /tmp/test-results/gotestsum/results.xml # path to where test results will be saved
+    executor: plugin-ci/default
+    steps:
+      - checkout
+      - run: mkdir -p $TEST_RESULTS # create the test results directory
+      - restore_cache:
+          key: 'go-mod-v1-{{ checksum "go.sum" }}'
+      - run: make test
+      - save_cache:
+          key: 'go-mod-v1-{{ checksum "go.sum" }}'
+          paths:
+            - /go/pkg/mod
+      - store_artifacts: # Upload test summary for display in Artifacts: https://circleci.com/docs/2.0/artifacts/
+          path: /tmp/test-results
+          destination: raw-test-output
+      - store_test_results: # Upload test results for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
+              path: /tmp/test-results/
+  
 workflows:
   ci-build:
     jobs:
       - plugin-ci/lint
-      - plugin-ci/test
+      - test 
+      - plugin-ci/deploy-release-github:
+          type: approval
+          requires:
+            - plugin-ci/lint
+            - test
+          filters:
+            branches:
+              only: master
+    

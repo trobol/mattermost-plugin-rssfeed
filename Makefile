@@ -39,45 +39,26 @@ ifneq ($(HAS_WEBAPP),)
 	cd webapp && npm run lint
 endif
 
-## Runs gofmt against all packages.
-.PHONY: gofmt
-gofmt:
-ifneq ($(HAS_SERVER),)
-	@echo Running gofmt
-	@for package in $$(go list ./...); do \
-		echo "Checking "$$package; \
-		files=$$(go list -f '{{range .GoFiles}}{{$$.Dir}}/{{.}} {{end}}' $$package); \
-		if [ "$$files" ]; then \
-			gofmt_output=$$(gofmt -d -s $$files 2>&1); \
-			if [ "$$gofmt_output" ]; then \
-				echo "$$gofmt_output"; \
-				echo "Gofmt failure"; \
-				exit 1; \
-			fi; \
-		fi; \
-	done
-	@echo Gofmt success
+## Runs golangci-lint and eslint.
+.PHONY: check-style
+check-style: webapp/.npminstall golangci-lint
+	@echo Checking for style guide compliance
+
+ifneq ($(HAS_WEBAPP),)
+	cd webapp && npm run lint
 endif
 
-## Runs govet against all packages.
-.PHONY: govet
-govet:
-ifneq ($(HAS_SERVER),)
-	@echo Running govet
-	@# Workaround because you can't install binaries without adding them to go.mod
-	env GO111MODULE=off $(GO) get golang.org/x/tools/go/analysis/passes/shadow/cmd/shadow
-	$(GO) vet ./...
-	$(GO) vet -vettool=$(GOPATH)/bin/shadow ./...
-	@echo Govet success
-endif
+## Run golangci-lint on codebase.
+.PHONY: golangci-lint
+golangci-lint:
+	@if ! [ -x "$$(command -v golangci-lint)" ]; then \
+		echo "golangci-lint is not installed. Please see https://github.com/golangci/golangci-lint#install for installation instructions."; \
+		exit 1; \
+	fi; \
 
-## Runs golint against all packages.
-.PHONY: golint
-golint:
-	@echo Running lint
-	env GO111MODULE=off $(GO) get golang.org/x/lint/golint
-	$(GOPATH)/bin/golint -set_exit_status ./...
-	@echo lint success
+	@echo Running golangci-lint
+	golangci-lint run ./...
+
 
 ## Builds the server, if it exists, including support for multiple architectures.
 .PHONY: server
@@ -167,7 +148,13 @@ debug-dist: apply server webapp-debug bundle
 .PHONY: test
 test: webapp/.npminstall
 ifneq ($(HAS_SERVER),)
-	$(GO) test -v $(GO_TEST_FLAGS) ./server/...
+	@if ! [ -x "$$(command -v gotestsum)" ]; then \
+		echo "gotestsum is not installed. Please see https://github.com/gotestyourself/gotestsum for installation instructions."; \
+		exit 1; \
+	fi; \
+
+	@echo Running gotestsum 
+	gotestsum -- -v $(GO_TEST_FLAGS) ./server/...
 endif
 ifneq ($(HAS_WEBAPP),)
 	cd webapp && $(NPM) run fix && $(NPM) run test;
