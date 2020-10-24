@@ -83,19 +83,26 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
-	keys, err := p.API.KVList(0, 50)
+	
+	const KEYS_PER_PAGE = 50
 
-	if err != nil {
-		return err
-	}
-	for _, key := range keys {
-		dictionaryOfSubscriptions, err := p.getSubscriptions(key)
+	for index := 0; true; index++ {
+		keys, err := p.API.KVList(index, KEYS_PER_PAGE)
+		if len(keys) < KEYS_PER_PAGE {
+			break
+		}
 		if err != nil {
 			return err
 		}
+		for _, key := range keys {
+			dictionaryOfSubscriptions, err := p.getSubscriptions(key)
+			if err != nil {
+				return err
+			}
 
-		for _, value := range dictionaryOfSubscriptions.Subscriptions {
-			p.processSubscription(key, value)
+			for _, value := range dictionaryOfSubscriptions.Subscriptions {
+				p.processSubscription(key, value)
+			}
 		}
 	}
 
