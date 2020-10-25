@@ -82,15 +82,16 @@ func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) err
 
 	// check if url already exists
 	_, ok := currentSubscriptions.Subscriptions[key]
-	if !ok {
-		currentSubscriptions.Subscriptions[key] = sub
-		err = p.storeSubscriptions(channelID, currentSubscriptions)
-		if err != nil {
+	if ok {
+		return errors.New("this channel is already subscribed to that feed")
+	}
+	currentSubscriptions.Subscriptions[key] = sub
+	err = p.storeSubscriptions(channelID, currentSubscriptions)
+	if err != nil {
 			p.API.LogError(err.Error())
 			return err
-		}
 	}
-	return errors.New("this channel is already subscribed to that feed")
+	return nil
 }
 
 func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, error) {
