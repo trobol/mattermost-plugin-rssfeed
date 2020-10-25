@@ -91,7 +91,6 @@ func (p *RSSFeedPlugin) setBotProfileImage(botUserID string) *model.AppError {
 		return &model.AppError{Message: err.Error()}
 	}
 
-	//profileImage, err := p.readFile(filepath.Join(bundlePath, "assets", "rss.png"))
 	path := filepath.Join(bundlePath, "assets", "rss.png")
 	p.API.LogDebug("Path: " + bundlePath)
 

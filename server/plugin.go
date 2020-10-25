@@ -83,12 +83,12 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
-	
-	const KEYS_PER_PAGE = 50
+
+	const keysPerPage = 50
 
 	for index := 0; true; index++ {
-		keys, err := p.API.KVList(index, KEYS_PER_PAGE)
-		if len(keys) < KEYS_PER_PAGE {
+		keys, err := p.API.KVList(index, keysPerPage)
+		if len(keys) < keysPerPage {
 			break
 		}
 		if err != nil {

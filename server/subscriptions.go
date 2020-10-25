@@ -88,8 +88,8 @@ func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) err
 	currentSubscriptions.Subscriptions[key] = sub
 	err = p.storeSubscriptions(channelID, currentSubscriptions)
 	if err != nil {
-			p.API.LogError(err.Error())
-			return err
+		p.API.LogError(err.Error())
+		return err
 	}
 	return nil
 }
