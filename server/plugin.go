@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5" //nolint comments
 	"encoding/hex"
 	"encoding/json"
@@ -38,6 +39,12 @@ type RSSFeedPlugin struct {
 	processHeartBeatFlag bool
 
 	FeedHandler
+}
+
+type SubscriptionsInfo struct {
+	subscriptionCount uint64
+	databaseSize      uint64
+	channelCount      uint64
 }
 
 // ServeHTTP hook from mattermost plugin
@@ -88,9 +95,7 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 
 	for index := 0; true; index++ {
 		keys, err := p.API.KVList(index, keysPerPage)
-		if len(keys) < keysPerPage {
-			break
-		}
+	
 		if err != nil {
 			return err
 		}
@@ -103,6 +108,9 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 			for _, value := range dictionaryOfSubscriptions.Subscriptions {
 				p.processSubscription(key, value)
 			}
+		}
+		if len(keys) < keysPerPage {
+			break
 		}
 	}
 
@@ -223,6 +231,55 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 	}
 
 	return groupedAttachments, nil
+}
+
+func (p *RSSFeedPlugin) getInfo() (SubscriptionsInfo, error) {
+	info := SubscriptionsInfo{subscriptionCount=0,
+	databaseSize=0,
+	channelCount=0}
+
+	const keysPerPage = 50
+
+	for index := 0; true; index++ {
+		
+		keys, err := p.API.KVList(index, keysPerPage)
+		info.channelCount += len(keys)
+		if err != nil {
+			return err
+		}
+		for _, key := range keys {
+			value, err := p.API.KVGet(key)
+			if err != nil {
+				return err
+			}
+
+			info.databaseSize += len(value)
+			
+			if value != nil {
+				var subscriptions *Subscriptions
+				err := json.NewDecoder(bytes.NewReader(value)).Decode(&subscriptions)
+				if err != nil {
+					return err
+				}
+				info.subscriptionCount += len(subscriptions)
+			}
+			
+			
+
+			for _, value := range dictionaryOfSubscriptions.Subscriptions {
+				p.processSubscription(key, value)
+			}
+		}
+		if len(keys) < keysPerPage {
+			break
+		}
+	}
+
+	return nil
+	
+	
+
+	return subscriptions, nil
 }
 
 func (p *RSSFeedPlugin) padAttachments(attachments []*model.SlackAttachment) [][]*model.SlackAttachment {
