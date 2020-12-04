@@ -42,7 +42,7 @@ endif
 
 ## Run golangci-lint on codebase.
 .PHONY: golangci-lint
-golangci-lint: golangci-lint-exist
+golangci-lint: golangci-lint-exists
 	@echo Running golangci-lint
 	golangci-lint run $(GO_LINT_FLAGS) ./...
 
