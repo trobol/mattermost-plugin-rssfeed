@@ -162,7 +162,7 @@ func (h FeedHandlerDefault) processAtomFeed(subscription *Subscription, feed *At
 			}
 		}
 
-		//timestamp field currently unused by mattermost
+		// timestamp field currently unused by mattermost
 		if item.Published != "" {
 			attachment.Timestamp = AtomParseTimestamp(item.Published)
 		} else {

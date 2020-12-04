@@ -30,15 +30,6 @@ all: check-style test dist
 apply:
 	./build/bin/manifest apply
 
-## Runs govet and gofmt against all packages.
-.PHONY: check-style
-check-style: webapp/.npminstall golangci-lint
-	@echo Checking for style guide compliance
-
-ifneq ($(HAS_WEBAPP),)
-	cd webapp && npm run lint
-endif
-
 ## Runs golangci-lint and eslint.
 .PHONY: check-style
 check-style: webapp/.npminstall golangci-lint
@@ -48,16 +39,25 @@ ifneq ($(HAS_WEBAPP),)
 	cd webapp && npm run lint
 endif
 
+
 ## Run golangci-lint on codebase.
 .PHONY: golangci-lint
-golangci-lint:
+golangci-lint: golangci-lint-exist
+	@echo Running golangci-lint
+	golangci-lint run $(GO_LINT_FLAGS) ./...
+
+
+.PHONY: golangci-lint-exists
+golangci-lint-exists:
 	@if ! [ -x "$$(command -v golangci-lint)" ]; then \
 		echo "golangci-lint is not installed. Please see https://github.com/golangci/golangci-lint#install for installation instructions."; \
 		exit 1; \
 	fi; \
 
-	@echo Running golangci-lint
-	golangci-lint run $(GO_LINT_FLAGS) ./... 
+.PHONY: fix-style
+fix-style: golangci-lint-exists
+	@echo Running golangci-lint with fix
+	golangci-lint run $(GO_LINT_FLAGS) --fix ./... 
 
 
 ## Builds the server, if it exists, including support for multiple architectures.

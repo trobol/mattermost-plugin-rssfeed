@@ -21,7 +21,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-//const RSSFeedIconURL = "./plugins/rssfeed/assets/rss.png"
+// const RSSFeedIconURL = "./plugins/rssfeed/assets/rss.png"
 
 // RSSFeedPlugin Object
 type RSSFeedPlugin struct {
@@ -72,8 +72,6 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 	}
 
 	for p.processHeartBeatFlag {
-		//p.API.LogDebug("Heartbeat")
-
 		err := p.processHeartBeat()
 		if err != nil {
 			p.API.LogError(err.Error())
@@ -83,7 +81,6 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
-
 	const keysPerPage = 50
 
 	for index := 0; true; index++ {
@@ -143,7 +140,7 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 		})
 	}
 
-	//Send as separate messages or group as few messages as possible
+	// Send as separate messages or group as few messages as possible
 	var groupedAttachments [][]*model.SlackAttachment
 	if config.GroupMessages {
 		groupedAttachments, err = p.groupAttachments(attachments)
@@ -203,7 +200,7 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 		}
 
 		if encodedSize > model.POST_PROPS_MAX_USER_RUNES {
-			//single attachment is too long, trim then add
+			// single attachment is too long, trim then add
 			diff := encodedSize - model.POST_PROPS_MAX_USER_RUNES
 			textOffset := len(attachment.Text) - diff
 
@@ -212,7 +209,7 @@ func (p *RSSFeedPlugin) groupAttachments(attachments []*model.SlackAttachment) (
 
 				groupedAttachments = append(groupedAttachments, []*model.SlackAttachment{attachment})
 			} else {
-				//if we cant trim log error and skip
+				// if we cant trim log error and skip
 				p.API.LogError("Attachment was too large and text could not be trimmed")
 			}
 			start = end + 1

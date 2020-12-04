@@ -135,10 +135,10 @@ func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArg
 		return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
 
 	case "help":
-		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(CommandHelp, "|", "`", -1)
+		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.ReplaceAll(CommandHelp, "|", "`")
 		return getCommandResponse(private, text), nil
 	default:
-		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.Replace(CommandHelp, "|", "`", -1)
+		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.ReplaceAll(CommandHelp, "|", "`")
 		return getCommandResponse(private, text), nil
 	}
 }
@@ -159,7 +159,7 @@ func parseURLParam(parameters *[]string) (string, error) {
 	return url, nil
 }
 
-//thanks to https://stackoverflow.com/a/55551215/8781351
+// thanks to https://stackoverflow.com/a/55551215/8781351
 func IsURL(str string) bool {
 	u, err := URL.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
