@@ -18,30 +18,35 @@
                 "key": "Heartbeat",
                 "display_name": "Time window between rss feed checks (minutes).",
                 "type": "text",
+                "default": "15",
                 "help_text": "This is used to set a timer for the system to know when to go check to see if there is any new data in the subscribed rss feeds.  Defaults to 15 minutes."
             },
             {
                 "key": "ShowDescription",
                 "display_name": "Show Description in RSS post.",
                 "type": "bool",
+                "default": "true",
                 "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post)."
             },
             {
                 "key": "HideSubscribeMessage",
                 "display_name": "Hide the Subscribe/Unsubscribe Message from channel",
                 "type": "bool",
+                "default": "true",
                 "help_text": "Control whether the subscribe and unsubscribe messages are shown to the whole channel or only the user who ran the command"
             },
             {
                 "key": "GroupMessages",
                 "display_name": "Group Messages",
                 "type": "bool",
+                "default": "true",
                 "help_text": "Control whether new items from the same feed will be grouped into one message"
             },
             {
                 "key": "SortMessages",
                 "display_name": "Sort Messages",
                 "type": "bool",
+                "default": "true",
                 "help_text": "Sort messages by date"
             },
             {
@@ -50,42 +55,44 @@
                 "type": "dropdown",
                 "help_text": "The default icon when a user's icon can't be found [Gravatar Icons](https://en.gravatar.com/site/implement/images/)",
                 "default": "mp",
-                "options": [{
-                    "display_name": "mystery-person",
-                    "value": "mp"
-                },
-                {
-                    "display_name": "identicon",
-                    "value": "identicon"
-                },
-                {
-                    "display_name": "monsterid",
-                    "value": "monsterid"
-                },
-                {
-                    "display_name":"wavatar",
-                    "value":"wavatar"
-                },
-                {
-                    "display_name":"retro",
-                    "value":"retro"
-                },
-                {
-                    "display_name":"robohash",
-                    "value":"robohash"
-                },
-                {
-                    "display_name":"blank",
-                    "value":"blank"
-                },
-                {
-                    "display_name":"404",
-                    "value":"404"
-                },
-                {
-                    "display_name":"custom",
-                    "value":"custom"
-                }]
+                "options": [
+                    {
+                        "display_name": "mystery-person",
+                        "value": "mp"
+                    },
+                    {
+                        "display_name": "identicon",
+                        "value": "identicon"
+                    },
+                    {
+                        "display_name": "monsterid",
+                        "value": "monsterid"
+                    },
+                    {
+                        "display_name": "wavatar",
+                        "value": "wavatar"
+                    },
+                    {
+                        "display_name": "retro",
+                        "value": "retro"
+                    },
+                    {
+                        "display_name": "robohash",
+                        "value": "robohash"
+                    },
+                    {
+                        "display_name": "blank",
+                        "value": "blank"
+                    },
+                    {
+                        "display_name": "404",
+                        "value": "404"
+                    },
+                    {
+                        "display_name": "custom",
+                        "value": "custom"
+                    }
+                ]
             },
             {
                 "key": "GravatarCustom",
