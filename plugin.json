@@ -3,7 +3,7 @@
     "name": "RSSFeed",
     "description": "This plugin serves as an rss subscription service for Mattermost.",
     "version": "0.2.2",
-    "min_server_version": "5.10",
+    "min_server_version": "5.10.0",
     "server": {
         "executables": {
             "linux-amd64": "server/dist/plugin-linux-amd64",
