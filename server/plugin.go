@@ -84,21 +84,32 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 	const keysPerPage = 50
 
 	for index := 0; true; index++ {
-		keys, err := p.API.KVList(index, keysPerPage)
-		if len(keys) < keysPerPage {
+		channelIDs, err := p.API.KVList(index, keysPerPage)
+		if len(channelIDs) < keysPerPage {
 			break
 		}
 		if err != nil {
 			return err
 		}
-		for _, key := range keys {
-			dictionaryOfSubscriptions, err := p.getSubscriptions(key)
+		for _, channelID := range channelIDs {
+			list, err := p.getSubscriptions(channelID)
 			if err != nil {
 				return err
 			}
 
-			for _, value := range dictionaryOfSubscriptions.Subscriptions {
-				p.processSubscription(key, value)
+			var wg sync.WaitGroup
+			for _, sub := range list.Subscriptions {
+				wg.Add(1)
+				go func(channelID string, sub *Subscription) {
+					defer wg.Done()
+					p.processSubscription(channelID, sub)
+				}(channelID, sub)
+			}
+			wg.Wait()
+
+			err = p.storeSubscriptions(channelID, list)
+			if err != nil {
+				p.API.LogError(err.Error())
 			}
 		}
 	}
@@ -120,6 +131,14 @@ func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
 	return heartbeatTime, nil
 }
 
+/*
+fetches & parses content,
+creates bot post(s)
+
+DOES NOT SAVE ETAG TO DATABASE
+in order for content caching to work (preventing duplicate posts)
+storeSubscriptions must be called
+*/
 func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subscription) {
 	config := p.getConfiguration()
 
@@ -153,11 +172,7 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 	}
 
 	for _, group := range groupedAttachments {
-		p.createBotPost("", group, channelID, model.POST_DEFAULT)
-	}
-
-	if err := p.updateSubscription(channelID, subscription); err != nil {
-		p.API.LogError(err.Error())
+		p.createBotAttachmentPost("", group, channelID)
 	}
 }
 
@@ -231,19 +246,33 @@ func (p *RSSFeedPlugin) padAttachments(attachments []*model.SlackAttachment) [][
 	return result
 }
 
-func (p *RSSFeedPlugin) createBotPost(msg string, attachments []*model.SlackAttachment, channelID string, postType string) {
+func (p *RSSFeedPlugin) createPost(post *model.Post) {
+	if _, err := p.API.CreatePost(post); err != nil {
+		p.API.LogError(err.Error())
+	}
+}
+
+func (p *RSSFeedPlugin) createBotAttachmentPost(msg string, attachments []*model.SlackAttachment, channelID string) {
 	post := &model.Post{
 		UserId:    p.botUserID,
 		ChannelId: channelID,
 		Message:   msg,
-		Type:      postType,
 	}
 
-	post.AddProp("attachments", attachments)
-
-	if _, err := p.API.CreatePost(post); err != nil {
-		p.API.LogError(err.Error())
+	if attachments != nil {
+		post.AddProp("attachments", attachments)
 	}
+	p.createPost(post)
+}
+
+func (p *RSSFeedPlugin) createBotEphemeralPost(msg string, channelID string, userID string) {
+	post := p.API.SendEphemeralPost(userID, &model.Post{
+		UserId:    p.botUserID,
+		ChannelId: channelID,
+		Message:   msg,
+	})
+
+	p.createPost(post)
 }
 
 func getGravatarIcon(email string, defaultIcon string) string {

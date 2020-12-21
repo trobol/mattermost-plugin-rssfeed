@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 	URL "net/url"
+	"strconv"
 	"strings"
-
-	"errors"
 
 	"github.com/mattermost/mattermost-server/model"
 	"github.com/mattermost/mattermost-server/plugin"
@@ -31,9 +30,19 @@ func getCommand() *model.Command {
 	}
 }
 
-func getCommandResponse(responseType, text string) *model.CommandResponse {
+func getCommandResponse(text string) *model.CommandResponse {
 	return &model.CommandResponse{
-		ResponseType: responseType,
+		ResponseType: model.COMMAND_RESPONSE_TYPE_IN_CHANNEL,
+		Text:         text,
+		Username:     botDisplayName,
+		IconURL:      RSSFeedIconURL,
+		Type:         model.POST_DEFAULT,
+	}
+}
+
+func getCommandPrivate(text string) *model.CommandResponse {
+	return &model.CommandResponse{
+		ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
 		Text:         text,
 		Username:     botDisplayName,
 		IconURL:      RSSFeedIconURL,
@@ -43,120 +52,135 @@ func getCommandResponse(responseType, text string) *model.CommandResponse {
 
 // ExecuteCommand will execute commands ...
 func (p *RSSFeedPlugin) ExecuteCommand(c *plugin.Context, args *model.CommandArgs) (*model.CommandResponse, *model.AppError) {
-	config := p.getConfiguration()
 	split := strings.Fields(args.Command)
+
 	command := split[0]
-	parameters := []string{}
+
 	action := ""
 	if len(split) > 1 {
 		action = split[1]
 	}
+
+	param := ""
 	if len(split) > 2 {
-		parameters = split[2:]
+		param = split[2]
 	}
 
 	if command != "/feed" {
 		return &model.CommandResponse{}, nil
 	}
 
-	private := model.COMMAND_RESPONSE_TYPE_EPHEMERAL
-
-	normal := model.COMMAND_RESPONSE_TYPE_IN_CHANNEL
-	if config.HideSubscribeMessage {
-		normal = private
-	}
-
 	switch action {
-	case "list":
-		txt := "### Subscriptions in this channel\n"
-		subscriptions, err := p.getSubscriptions(args.ChannelId)
-		if err != nil {
-			return getCommandResponse(private, err.Error()), nil
-		}
-
-		for _, sub := range subscriptions.Subscriptions {
-			txt += fmt.Sprintf("* [%s](%s)\n", sub.Title, sub.URL)
-		}
-		return getCommandResponse(private, txt), nil
 	case "subscribe", "sub":
-
-		url, err := parseURLParam(&parameters)
-
-		if err != nil {
-			return getCommandResponse(private, fmt.Sprintf("Invalid arguments %s.", err.Error())), nil
-		}
-
-		subscriptions, err := p.getSubscriptions(args.ChannelId)
-
-		if err != nil {
-			return getCommandResponse(private, fmt.Sprintf("Error: %s", err)), nil
-		}
-
-		key := url
-		sub, ok := subscriptions.Subscriptions[key]
-
-		if ok {
-			return getCommandResponse(private, fmt.Sprintf("Already Subscribed to [%s](%s)", sub.Title, url)), nil
-		}
-
-		go p.subscribe(context.Background(), args.ChannelId, url)
-
-		return getCommandResponse(private, fmt.Sprintf("Attempting to Subscribed to %s", url)), nil
+		return p.handleSub(param, args), nil
+	case "list":
+		return p.handleList(param, args), nil
 	case "unsubscribe", "unsub":
-
-		url, err := parseURLParam(&parameters)
-
-		if err != nil {
-			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
-		}
-		sub, err := p.unsubscribe(args.ChannelId, url)
-		if err != nil {
-			return getCommandResponse(private, fmt.Sprintf("Unable to unsubscribe: `%s`", err.Error())), nil
-		}
-
-		return getCommandResponse(normal, fmt.Sprintf("Unsubscribed from [%s](%s)", sub.Title, url)), nil
+		return p.handleUnsub(param, args), nil
 	case "fetch":
-		url, err := parseURLParam(&parameters)
-
-		if err != nil {
-			return getCommandResponse(private, "Invalid arguments: "+err.Error()), nil
-		}
-		subscriptions, err := p.getSubscriptions(args.ChannelId)
-
-		if err != nil {
-			return getCommandResponse(private, err.Error()), nil
-		}
-
-		subscription, ok := subscriptions.Subscriptions[url]
-		if ok {
-			go p.processSubscription(args.ChannelId, subscription)
-			return getCommandResponse(normal, "Fetching "+url), nil
-		}
-		return getCommandResponse(private, "Unable to fetch: not subscribed to feed"), nil
-
+		return p.handleFetch(param, args), nil
 	case "help":
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.ReplaceAll(CommandHelp, "|", "`")
-		return getCommandResponse(private, text), nil
+		return getCommandPrivate(text), nil
 	default:
 		text := "###### Mattermost RSSFeed Plugin - Slash Command Help\n" + strings.ReplaceAll(CommandHelp, "|", "`")
-		return getCommandResponse(private, text), nil
+		return getCommandPrivate(text), nil
 	}
 }
 
-func parseURLParam(parameters *[]string) (string, error) {
-	if len(*parameters) == 0 {
-		return "", errors.New("url not specified")
-	} else if len(*parameters) > 1 {
-		return "", errors.New("too many arguments")
+func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.CommandResponse {
+	if !IsURL(param) {
+		return getCommandPrivate("Argument is not a valid URL")
 	}
 
-	url := (*parameters)[0]
+	subList, err := p.getSubscriptions(args.ChannelId)
 
-	if !IsURL(url) {
-		return "", errors.New("url invalid")
+	if err != nil {
+		return getCommandPrivate(fmt.Sprintf("Error: %s", err))
 	}
 
-	return url, nil
+	sub, _ := subList.find(param)
+
+	if sub != nil {
+		return getCommandPrivate(fmt.Sprintf("Already Subscribed to [%s](%s)", sub.Title, sub.URL))
+	}
+
+	go p.subscribe(context.Background(), param, args.ChannelId, args.UserId)
+
+	return getCommandPrivate(fmt.Sprintf("Attempting to Subscribed to %s", param))
+}
+
+func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *model.CommandResponse {
+	index, err := strconv.Atoi(param)
+
+	if err == nil {
+		err = p.unsubscribeFromIndex(args.ChannelId, index)
+	} else {
+		if !IsURL(param) {
+			return getCommandPrivate("Argument is not a valid URL or index")
+		}
+		err = p.unsubscribeFromURL(args.ChannelId, param)
+	}
+
+	if err != nil {
+		return getCommandPrivate("Error: " + err.Error())
+	}
+
+	return getCommandPrivate("Successfully Unsubscribed")
+}
+
+func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *model.CommandResponse {
+	subList, err := p.getSubscriptions(args.ChannelId)
+	if err != nil {
+		p.API.LogError(err.Error())
+	}
+	var sub *Subscription = nil
+
+	index, err := strconv.Atoi(param)
+
+	if err == nil {
+		if index < 0 || index > len(subList.Subscriptions) {
+			return getCommandPrivate("index out of range")
+		}
+		sub = subList.Subscriptions[index]
+	} else {
+		if !IsURL(param) {
+			return getCommandPrivate("Argument is not a valid URL or index")
+		}
+		sub, _ = subList.find(param)
+		if sub == nil {
+			return getCommandPrivate("Channel not subscribed")
+		}
+	}
+
+	go func(channelID string, sub *Subscription, subList *SubscriptionList) {
+		p.processSubscription(channelID, sub)
+		err := p.storeSubscriptions(channelID, subList)
+		if err != nil {
+			p.API.LogError(err.Error())
+		}
+	}(args.ChannelId, sub, subList)
+
+	return getCommandResponse("Fetching " + sub.Title)
+}
+
+func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model.CommandResponse {
+	hideURLs := p.getConfiguration().HideURLs
+	txt := "### Subscriptions in this channel\n"
+
+	subscriptions, err := p.getSubscriptions(args.ChannelId)
+	if err != nil {
+		return getCommandPrivate(err.Error())
+	}
+
+	for index, sub := range subscriptions.Subscriptions {
+		if hideURLs {
+			txt += fmt.Sprintf("%d: %s\n", index, sub.Title)
+		} else {
+			txt += fmt.Sprintf("%d: [%s](%s)\n", index, sub.Title, sub.URL)
+		}
+	}
+	return getCommandPrivate(txt)
 }
 
 // thanks to https://stackoverflow.com/a/55551215/8781351

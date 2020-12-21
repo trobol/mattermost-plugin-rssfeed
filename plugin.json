@@ -26,28 +26,23 @@
                 "key": "ShowDescription",
                 "display_name": "Show Description in RSS post.",
                 "type": "bool",
-                "default": "true",
                 "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post)."
             },
             {
-                "key": "HideSubscribeMessage",
-                "display_name": "Hide the Subscribe/Unsubscribe Message from channel",
-                "type": "bool",
-                "default": "true",
-                "help_text": "Control whether the subscribe and unsubscribe messages are shown to the whole channel or only the user who ran the command"
+                "key":"HideURLs",
+                "display_name": "Hide URL from public messages",
+                "type":"bool"
             },
             {
                 "key": "GroupMessages",
                 "display_name": "Group Messages",
                 "type": "bool",
-                "default": "true",
                 "help_text": "Control whether new items from the same feed will be grouped into one message"
             },
             {
                 "key": "SortMessages",
                 "display_name": "Sort Messages",
                 "type": "bool",
-                "default": "true",
                 "help_text": "Sort messages by date"
             },
             {

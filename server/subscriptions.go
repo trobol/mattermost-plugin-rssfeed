@@ -21,13 +21,34 @@ type Subscription struct {
 	Color     string
 }
 
-// Subscriptions map to key value pairs
-type Subscriptions struct {
+type SubscriptionList struct {
+	Subscriptions []*Subscription
+}
+
+// for old database compatibility
+type SubscriptionMap struct {
 	Subscriptions map[string]*Subscription
 }
 
-// Subscribe prosses the /feed subscribe <channel> <url>
-func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url string) {
+func (s *SubscriptionList) find(url string) (*Subscription, int) {
+	for index, sub := range s.Subscriptions {
+		if sub.URL == url {
+			return sub, index
+		}
+	}
+	return nil, -1
+}
+
+func (s *SubscriptionList) remove(index int) {
+	s.Subscriptions = append(s.Subscriptions[:index], s.Subscriptions[index+1:]...)
+}
+
+func (s *SubscriptionList) addpend(sub *Subscription) {
+	s.Subscriptions = append(s.Subscriptions, sub)
+}
+
+// Subscribe process the /feed subscribe <channel> <url>
+func (p *RSSFeedPlugin) subscribe(ctx context.Context, url string, channelID string, userID string) {
 	sub := &Subscription{
 		URL:   url,
 		XML:   "",
@@ -36,17 +57,16 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 
 	info, err := p.FetchFeedInfo(url)
 
-	if err != nil {
-		p.API.LogError(err.Error())
-		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
-		return
+	if err == nil {
+		sub.Title = info.Title
+		sub.Format = info.Format
+		err = p.addSubscription(channelID, sub)
 	}
 
-	sub.Title = info.Title
-	sub.Format = info.Format
-
-	if err := p.addSubscription(channelID, sub); err != nil {
-		p.createBotPost(fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error()), nil, channelID, model.POST_DEFAULT)
+	if err != nil {
+		p.API.LogError(err.Error())
+		msg := fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error())
+		p.createBotEphemeralPost(msg, channelID, userID)
 		return
 	}
 
@@ -68,34 +88,27 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, channelID string, url str
 		},
 	}
 
-	p.createBotPost("Subscribed to:", []*model.SlackAttachment{attachment}, channelID, model.POST_DEFAULT)
+	p.createBotAttachmentPost("Subscribed to:", []*model.SlackAttachment{attachment}, channelID)
 }
 
 func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) error {
-	currentSubscriptions, err := p.getSubscriptions(channelID)
+	subList, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
 		return err
 	}
-
-	key := sub.URL
 
 	// check if url already exists
-	_, ok := currentSubscriptions.Subscriptions[key]
-	if ok {
+	_, index := subList.find(sub.URL)
+	if index != -1 {
 		return errors.New("this channel is already subscribed to that feed")
 	}
-	currentSubscriptions.Subscriptions[key] = sub
-	err = p.storeSubscriptions(channelID, currentSubscriptions)
-	if err != nil {
-		p.API.LogError(err.Error())
-		return err
-	}
-	return nil
+	subList.addpend(sub)
+	return p.storeSubscriptions(channelID, subList)
 }
 
-func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, error) {
-	var subscriptions *Subscriptions
+func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*SubscriptionList, error) {
+	var subList *SubscriptionList
 
 	value, err := p.API.KVGet(channelID)
 	if err != nil {
@@ -104,18 +117,33 @@ func (p *RSSFeedPlugin) getSubscriptions(channelID string) (*Subscriptions, erro
 	}
 
 	if value == nil {
-		subscriptions = &Subscriptions{Subscriptions: map[string]*Subscription{}}
+		subList = &SubscriptionList{Subscriptions: []*Subscription{}}
 	} else {
-		err := json.NewDecoder(bytes.NewReader(value)).Decode(&subscriptions)
+		decoder := json.NewDecoder(bytes.NewReader(value))
+		err := decoder.Decode(&subList)
 		if err != nil {
-			return nil, err
+			// convert old database entries
+			var subMap *SubscriptionMap
+			decoder := json.NewDecoder(bytes.NewReader(value))
+			err := decoder.Decode(&subMap)
+			if err != nil {
+				return nil, err
+			}
+
+			subList = &SubscriptionList{Subscriptions: make([]*Subscription, len(subMap.Subscriptions))}
+			index := 0
+
+			for _, sub := range subMap.Subscriptions {
+				subList.Subscriptions[index] = sub
+				index++
+			}
 		}
 	}
 
-	return subscriptions, nil
+	return subList, nil
 }
 
-func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *Subscriptions) error {
+func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *SubscriptionList) error {
 	b, err := json.Marshal(s)
 	if err != nil {
 		p.API.LogError(err.Error())
@@ -123,37 +151,55 @@ func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *Subscriptions) e
 	}
 
 	if err := p.API.KVSet(channelID, b); err != nil {
-		p.API.LogError(err.Error())
 		return err
 	}
 	return nil
 }
 
-func (p *RSSFeedPlugin) unsubscribe(channelID string, url string) (*Subscription, error) {
-	currentSubscriptions, err := p.getSubscriptions(channelID)
+func (p *RSSFeedPlugin) unsubscribeFromURL(channelID string, url string) error {
+	subs, err := p.getSubscriptions(channelID)
 	if err != nil {
 		p.API.LogError(err.Error())
-		return nil, err
+		return err
 	}
 
-	subClone := &Subscription{}
+	_, index := subs.find(url)
 
-	key := url
-	sub, ok := currentSubscriptions.Subscriptions[key]
-	if ok {
-		*subClone = *sub
-		delete(currentSubscriptions.Subscriptions, key)
-		if err := p.storeSubscriptions(channelID, currentSubscriptions); err != nil {
+	if index != -1 {
+		subs.remove(index)
+		if err := p.storeSubscriptions(channelID, subs); err != nil {
 			p.API.LogError(err.Error())
-			return nil, err
+			return err
 		}
 
-		return subClone, nil
+		return nil
 	}
 
-	return nil, errors.New("not subscribed")
+	return errors.New("not subscribed to that url")
 }
 
+func (p *RSSFeedPlugin) unsubscribeFromIndex(channelID string, index int) error {
+	subs, err := p.getSubscriptions(channelID)
+	if err != nil {
+		p.API.LogError(err.Error())
+		return err
+	}
+
+	if index < 0 || index >= len(subs.Subscriptions) {
+		return errors.New("index out of range")
+	}
+
+	subs.remove(index)
+	err = p.storeSubscriptions(channelID, subs)
+	if err != nil {
+		p.API.LogError(err.Error())
+		return err
+	}
+
+	return nil
+}
+
+/*
 func (p *RSSFeedPlugin) updateSubscription(channelID string, subscription *Subscription) error {
 	currentSubscriptions, err := p.getSubscriptions(channelID)
 	if err != nil {
@@ -172,3 +218,4 @@ func (p *RSSFeedPlugin) updateSubscription(channelID string, subscription *Subsc
 	}
 	return nil
 }
+*/

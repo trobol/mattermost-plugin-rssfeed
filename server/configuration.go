@@ -19,14 +19,14 @@ import (
 // If you add non-reference types to your configuration struct, be sure to rewrite Clone as a deep
 // copy appropriate for your types.
 type configuration struct {
-	Heartbeat            string
-	ShowDescription      bool
-	HideSubscribeMessage bool
-	GroupMessages        bool
-	SortMessages         bool
-	GravatarDefault      string
-	GravatarCustom       string
-	disabled             bool
+	Heartbeat       string
+	ShowDescription bool
+	HideURLs        bool
+	GroupMessages   bool
+	SortMessages    bool
+	GravatarDefault string
+	GravatarCustom  string
+	disabled        bool
 }
 
 // Clone shallow copies the configuration. Your implementation may require a deep copy if
