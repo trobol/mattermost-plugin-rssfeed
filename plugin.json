@@ -19,31 +19,35 @@
                 "key": "Heartbeat",
                 "display_name": "Time window between rss feed checks (minutes).",
                 "type": "text",
-                "default": "15",
-                "help_text": "This is used to set a timer for the system to know when to go check to see if there is any new data in the subscribed rss feeds.  Defaults to 15 minutes."
+                "help_text": "This is used to set a timer for the system to know when to go check to see if there is any new data in the subscribed rss feeds.  Defaults to 15 minutes.",
+                "default": "15"
             },
             {
                 "key": "ShowDescription",
                 "display_name": "Show Description in RSS post.",
                 "type": "bool",
-                "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post)."
+                "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post).",
+                "default": "true"
             },
             {
                 "key":"HideURLs",
                 "display_name": "Hide URL from public messages",
-                "type":"bool"
+                "type":"bool",
+                "default": "true"
             },
             {
                 "key": "GroupMessages",
                 "display_name": "Group Messages",
                 "type": "bool",
-                "help_text": "Control whether new items from the same feed will be grouped into one message"
+                "help_text": "Control whether new items from the same feed will be grouped into one message",
+                "default": "true"
             },
             {
                 "key": "SortMessages",
                 "display_name": "Sort Messages",
                 "type": "bool",
-                "help_text": "Sort messages by date"
+                "help_text": "Sort messages by date",
+                "default": "true"
             },
             {
                 "key": "GravatarDefault",
