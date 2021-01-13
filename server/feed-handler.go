@@ -190,6 +190,9 @@ func (h FeedHandlerDefault) FetchFeedBody(sub *Subscription) (string, error) {
 		return "", err
 	}
 
+	// setting ETag will (depending on the support of the server)
+	// return only entries from after the date or NotModified if there are none
+	// https://en.wikipedia.org/wiki/HTTP_ETag
 	req.Header.Add("If-None-Match", sub.ETag)
 
 	return h.fetchRequest(req)

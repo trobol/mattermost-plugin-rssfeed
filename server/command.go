@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
-	URL "net/url"
+	net_url "net/url"
 	"strconv"
 	"strings"
 
@@ -14,8 +14,8 @@ import (
 // CommandHelp is the text you see when you type /feed help
 const CommandHelp = `* |/feed subscribe [url]| - Connect your Mattermost channel to an rss feed 
 * |/feed list| - Lists the rss feeds you have subscribed to
-* |/feed unsubscribe [url]| - Unsubscribes the Mattermost channel from the rss feed
-* |/feed fetch [url]| - Fetches the latest content from the rss feed`
+* |/feed unsubscribe [id]| - Unsubscribes the Mattermost channel from the rss feed
+* |/feed fetch [id]| - Fetches the latest content from the rss feed`
 
 // + `* |/feed initiate| - initiates the rss feed subscription poller`
 
@@ -107,7 +107,7 @@ func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.
 
 	go p.subscribe(context.Background(), param, args.ChannelId, args.UserId)
 
-	return getCommandPrivate(fmt.Sprintf("Attempting to Subscribed to %s", param))
+	return getCommandPrivate(fmt.Sprintf("Attempting to Subscribed to [url](%s)", param))
 }
 
 func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *model.CommandResponse {
@@ -185,6 +185,6 @@ func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model
 
 // thanks to https://stackoverflow.com/a/55551215/8781351
 func IsURL(str string) bool {
-	u, err := URL.Parse(str)
+	u, err := net_url.Parse(str)
 	return err == nil && u.Scheme != "" && u.Host != ""
 }
