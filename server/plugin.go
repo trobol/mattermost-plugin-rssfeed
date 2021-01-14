@@ -71,16 +71,13 @@ func (p *RSSFeedPlugin) handleIcon(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *RSSFeedPlugin) makeSelectPost(channelID string, postID string, selected uint32) *model.Post {
+func (p *RSSFeedPlugin) makeUnsubAttachments(channelID string, selected uint32) (*model.SlackAttachment, error) {
 	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
 
 	subs, err := p.getSubscriptions(channelID)
 
 	if err != nil {
-		return &model.Post{
-			ChannelId: channelID,
-			Message:   "failed to obtain subscriptions",
-		}
+		return nil, err
 	}
 	options := make([]*model.PostActionOptions, len(subs.Subscriptions))
 	for i, s := range subs.Subscriptions {
@@ -94,37 +91,32 @@ func (p *RSSFeedPlugin) makeSelectPost(channelID string, postID string, selected
 
 	url := fmt.Sprintf("%s/plugins/%s/unsub", siteURL, manifest.ID)
 
-	post := &model.Post{
-		ChannelId: channelID,
-		Id:        postID,
-		Props: model.StringInterface{
-			"attachments": []*model.SlackAttachment{{
-				Actions: []*model.PostAction{{
-					Type: model.POST_ACTION_TYPE_SELECT,
-					Name: "Select Subscription",
-					Integration: &model.PostActionIntegration{
-						URL: url,
-						Context: model.StringInterface{
-							"action": "select",
-						},
-					},
-					Options:       options,
-					DefaultOption: selectedStr,
-				}, {
-					Type: model.POST_ACTION_TYPE_BUTTON,
-					Name: "Unsub",
-					Integration: &model.PostActionIntegration{
-						URL: url,
-						Context: model.StringInterface{
-							"action":          "post",
-							"selected_option": selectedStr,
-						},
-					},
-				}},
-			}},
-		},
+	attachment := &model.SlackAttachment{
+		Actions: []*model.PostAction{{
+			Type: model.POST_ACTION_TYPE_SELECT,
+			Name: "Select Subscription",
+			Integration: &model.PostActionIntegration{
+				URL: url,
+				Context: model.StringInterface{
+					"action": "select",
+				},
+			},
+			Options:       options,
+			DefaultOption: selectedStr,
+		}, {
+			Type: model.POST_ACTION_TYPE_BUTTON,
+			Name: "Unsub",
+			Integration: &model.PostActionIntegration{
+				URL: url,
+				Context: model.StringInterface{
+					"action":          "post",
+					"selected_option": selectedStr,
+				},
+			},
+		}},
 	}
-	return post
+
+	return attachment, nil
 }
 
 func (p *RSSFeedPlugin) handleHTTPUnsub(w http.ResponseWriter, r *http.Request) {
@@ -143,61 +135,55 @@ func (p *RSSFeedPlugin) handleHTTPUnsub(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	selected, err := strconv.ParseUint(selectedStr, 10, 32)
+	selected, castErr := strconv.ParseUint(selectedStr, 10, 32)
 
-	if err != nil {
+	if castErr != nil {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	var post *model.Post
-	if action == "select" {
-		post = p.makeSelectPost(request.ChannelId, request.PostId, uint32(selected))
-	} else if action == "post" {
-		var attachment *model.SlackAttachment
+	var attachment *model.SlackAttachment
+	var err error
+	switch action {
+	case "select":
+		attachment, err = p.makeUnsubAttachments(request.ChannelId, uint32(selected))
+
+	case "post":
 		if selected == 0 {
 			attachment = &model.SlackAttachment{
 				Title: "No changes were made",
 				Color: "#03fc73",
 			}
 		} else {
-			err := p.unsubscribeFromID(request.ChannelId, uint32(selected))
+			err = p.unsubscribeFromID(request.ChannelId, uint32(selected))
 
-			if err != nil {
-				attachment = &model.SlackAttachment{
-					Title: "Error",
-					Text:  err.Error(),
-					Color: "#03fc73",
-				}
-			} else {
+			if err == nil {
 				attachment = &model.SlackAttachment{
 					Title: "Success",
 					Color: "#03fc73",
 				}
 			}
-
 		}
+	default:
+		err = errors.New("invalid request")
+	}
 
-		post = &model.Post{
-			Id:        request.PostId,
-			ChannelId: request.ChannelId,
-			Props: model.StringInterface{
-				"attachments": []*model.SlackAttachment{
-					attachment,
-				}},
+	if err != nil {
+		attachment = &model.SlackAttachment{
+			Title: "Error",
+			Text:  err.Error(),
+			Color: "#03fc73",
 		}
-
-	} else {
-		post = &model.Post{
-			Id:        request.PostId,
-			ChannelId: request.ChannelId,
-			Props: model.StringInterface{
-				"attachments": []*model.SlackAttachment{{
-					Title: "Invalid Request",
-					Color: "#fc0345",
-				}},
+	}
+	post := &model.Post{
+		Id:        request.PostId,
+		UserId:    p.botUserID,
+		ChannelId: request.ChannelId,
+		Props: model.StringInterface{
+			"attachments": []*model.SlackAttachment{
+				attachment,
 			},
-		}
+		},
 	}
 
 	p.API.UpdateEphemeralPost(request.UserId, post)
@@ -205,7 +191,6 @@ func (p *RSSFeedPlugin) handleHTTPUnsub(w http.ResponseWriter, r *http.Request) 
 	resp := &model.PostActionIntegrationResponse{}
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(resp.ToJson())
-
 }
 
 func (p *RSSFeedPlugin) setupHeartBeat() {
@@ -320,7 +305,7 @@ func (p *RSSFeedPlugin) processSubscription(channelID string, subscription *Subs
 	}
 
 	for _, group := range groupedAttachments {
-		p.createBotAttachmentPost("", group, channelID)
+		p.createBotPost("", channelID, "", group)
 	}
 }
 
@@ -400,7 +385,8 @@ func (p *RSSFeedPlugin) createPost(post *model.Post) {
 	}
 }
 
-func (p *RSSFeedPlugin) createBotAttachmentPost(msg string, attachments []*model.SlackAttachment, channelID string) {
+// if userId is provided the post will be ephemeral
+func (p *RSSFeedPlugin) createBotPost(msg string, channelID string, userID string, attachments []*model.SlackAttachment) {
 	post := &model.Post{
 		UserId:    p.botUserID,
 		ChannelId: channelID,
@@ -410,15 +396,10 @@ func (p *RSSFeedPlugin) createBotAttachmentPost(msg string, attachments []*model
 	if attachments != nil {
 		post.AddProp("attachments", attachments)
 	}
-	p.createPost(post)
-}
 
-func (p *RSSFeedPlugin) createBotEphemeralPost(msg string, channelID string, userID string) {
-	post := p.API.SendEphemeralPost(userID, &model.Post{
-		UserId:    p.botUserID,
-		ChannelId: channelID,
-		Message:   msg,
-	})
+	if userID != "" {
+		post = p.API.SendEphemeralPost(userID, post)
+	}
 
 	p.createPost(post)
 }

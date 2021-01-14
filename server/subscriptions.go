@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"math/rand"
 
 	"github.com/mattermost/mattermost-server/model"
 )
@@ -80,7 +81,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, url string, channelID str
 	if err != nil {
 		p.API.LogError(err.Error())
 		msg := fmt.Sprintf("Failed to subscribe to %s: `%s`", url, err.Error())
-		p.createBotEphemeralPost(msg, channelID, userID)
+		p.createBotPost(msg, channelID, userID, nil)
 		return
 	}
 
@@ -102,7 +103,7 @@ func (p *RSSFeedPlugin) subscribe(ctx context.Context, url string, channelID str
 		},
 	}
 
-	p.createBotAttachmentPost("Subscribed to:", []*model.SlackAttachment{attachment}, channelID)
+	p.createBotPost("Subscribed to:", channelID, "", []*model.SlackAttachment{attachment})
 }
 
 func (p *RSSFeedPlugin) addSubscription(channelID string, sub *Subscription) error {
@@ -170,49 +171,6 @@ func (p *RSSFeedPlugin) storeSubscriptions(channelID string, s *SubscriptionList
 	return nil
 }
 
-func (p *RSSFeedPlugin) unsubscribeFromURL(channelID string, url string) error {
-	subs, err := p.getSubscriptions(channelID)
-	if err != nil {
-		p.API.LogError(err.Error())
-		return err
-	}
-
-	_, index := subs.find(url)
-
-	if index != -1 {
-		subs.remove(index)
-		if err := p.storeSubscriptions(channelID, subs); err != nil {
-			p.API.LogError(err.Error())
-			return err
-		}
-
-		return nil
-	}
-
-	return errors.New("not subscribed to that url")
-}
-
-func (p *RSSFeedPlugin) unsubscribeFromIndex(channelID string, index int) error {
-	subs, err := p.getSubscriptions(channelID)
-	if err != nil {
-		p.API.LogError(err.Error())
-		return err
-	}
-
-	if index < 0 || index >= len(subs.Subscriptions) {
-		return errors.New("index out of range")
-	}
-
-	subs.remove(index)
-	err = p.storeSubscriptions(channelID, subs)
-	if err != nil {
-		p.API.LogError(err.Error())
-		return err
-	}
-
-	return nil
-}
-
 func (p *RSSFeedPlugin) unsubscribeFromID(channelID string, id uint32) error {
 	subs, err := p.getSubscriptions(channelID)
 	if err != nil {
@@ -237,27 +195,10 @@ func (p *RSSFeedPlugin) unsubscribeFromID(channelID string, id uint32) error {
 
 func makeHash(s string) uint32 {
 	h := fnv.New32a()
-	h.Write([]byte(s))
+	_, err := h.Write([]byte(s))
+	// if hashing fails for some reason
+	if err != nil {
+		return rand.Uint32() // #nosec
+	}
 	return h.Sum32()
 }
-
-/*
-func (p *RSSFeedPlugin) updateSubscription(channelID string, subscription *Subscription) error {
-	currentSubscriptions, err := p.getSubscriptions(channelID)
-	if err != nil {
-		p.API.LogError(err.Error())
-		return err
-	}
-
-	key := subscription.URL
-	_, ok := currentSubscriptions.Subscriptions[key]
-	if ok {
-		currentSubscriptions.Subscriptions[key] = subscription
-		if err := p.storeSubscriptions(channelID, currentSubscriptions); err != nil {
-			p.API.LogError(err.Error())
-			return err
-		}
-	}
-	return nil
-}
-*/

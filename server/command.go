@@ -110,9 +110,13 @@ func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.
 }
 
 func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *model.CommandResponse {
+	attachment, err := p.makeUnsubAttachments(args.ChannelId, 0)
+	if err != nil {
+		return getCommandPrivate(err.Error())
+	}
 
-	post := p.makeSelectPost(args.ChannelId, "", 0)
-	_ = p.API.SendEphemeralPost(args.UserId, post)
+	p.createBotPost("", args.ChannelId, args.UserId, []*model.SlackAttachment{attachment})
+
 	return &model.CommandResponse{}
 }
 
@@ -122,7 +126,6 @@ func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *mode
 }
 
 func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model.CommandResponse {
-
 	hideURLs := p.getConfiguration().HideURLs
 	subs, err := p.getSubscriptions(args.ChannelId)
 	if err != nil {
