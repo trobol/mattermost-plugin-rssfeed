@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"hash/fnv"
 
 	"github.com/mattermost/mattermost-server/model"
 )
@@ -19,6 +20,8 @@ type Subscription struct {
 	Format    FeedFormat
 	Title     string
 	Color     string
+	ID        uint32
+	UserID    string // the user who created the subscription
 }
 
 type SubscriptionList struct {
@@ -39,6 +42,15 @@ func (s *SubscriptionList) find(url string) (*Subscription, int) {
 	return nil, -1
 }
 
+func (s *SubscriptionList) findID(id uint32) (*Subscription, int) {
+	for index, sub := range s.Subscriptions {
+		if sub.ID == id {
+			return sub, index
+		}
+	}
+	return nil, -1
+}
+
 func (s *SubscriptionList) remove(index int) {
 	s.Subscriptions = append(s.Subscriptions[:index], s.Subscriptions[index+1:]...)
 }
@@ -50,9 +62,11 @@ func (s *SubscriptionList) addpend(sub *Subscription) {
 // Subscribe process the /feed subscribe <channel> <url>
 func (p *RSSFeedPlugin) subscribe(ctx context.Context, url string, channelID string, userID string) {
 	sub := &Subscription{
-		URL:   url,
-		XML:   "",
-		Color: hashColor(url),
+		URL:    url,
+		XML:    "",
+		Color:  hashColor(url),
+		ID:     makeHash(url),
+		UserID: userID,
 	}
 
 	info, err := p.FetchFeedInfo(url)
@@ -197,6 +211,34 @@ func (p *RSSFeedPlugin) unsubscribeFromIndex(channelID string, index int) error 
 	}
 
 	return nil
+}
+
+func (p *RSSFeedPlugin) unsubscribeFromID(channelID string, id uint32) error {
+	subs, err := p.getSubscriptions(channelID)
+	if err != nil {
+		p.API.LogError(err.Error())
+		return err
+	}
+
+	_, index := subs.findID(id)
+
+	if index != -1 {
+		subs.remove(index)
+		if err := p.storeSubscriptions(channelID, subs); err != nil {
+			p.API.LogError(err.Error())
+			return err
+		}
+
+		return nil
+	}
+
+	return errors.New("id not found")
+}
+
+func makeHash(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
 }
 
 /*

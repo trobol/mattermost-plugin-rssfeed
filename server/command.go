@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	net_url "net/url"
-	"strconv"
 	"strings"
 
 	"github.com/mattermost/mattermost-server/model"
@@ -12,10 +11,10 @@ import (
 )
 
 // CommandHelp is the text you see when you type /feed help
-const CommandHelp = `* |/feed subscribe [url]| - Connect your Mattermost channel to an rss feed 
-* |/feed list| - Lists the rss feeds you have subscribed to
-* |/feed unsubscribe [id]| - Unsubscribes the Mattermost channel from the rss feed
-* |/feed fetch [id]| - Fetches the latest content from the rss feed`
+const CommandHelp = `* |/feed sub [url]| - Connect your Mattermost channel to an rss feed 
+* |/feed list | - Lists the rss feeds you have subscribed to
+* |/feed unsub | - Opens the unsubscribe dialog
+* |/feed fetch | - Fetches the latest content from all the rss feeds`
 
 // + `* |/feed initiate| - initiates the rss feed subscription poller`
 
@@ -111,76 +110,68 @@ func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.
 }
 
 func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *model.CommandResponse {
-	index, err := strconv.Atoi(param)
 
-	if err == nil {
-		err = p.unsubscribeFromIndex(args.ChannelId, index)
-	} else {
-		if !IsURL(param) {
-			return getCommandPrivate("Argument is not a valid URL or index")
-		}
-		err = p.unsubscribeFromURL(args.ChannelId, param)
-	}
-
-	if err != nil {
-		return getCommandPrivate("Error: " + err.Error())
-	}
-
-	return getCommandPrivate("Successfully Unsubscribed")
+	post := p.makeSelectPost(args.ChannelId, "", 0)
+	_ = p.API.SendEphemeralPost(args.UserId, post)
+	return &model.CommandResponse{}
 }
 
 func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *model.CommandResponse {
-	subList, err := p.getSubscriptions(args.ChannelId)
-	if err != nil {
-		p.API.LogError(err.Error())
-	}
-	var sub *Subscription = nil
-
-	index, err := strconv.Atoi(param)
-
-	if err == nil {
-		if index < 0 || index > len(subList.Subscriptions) {
-			return getCommandPrivate("index out of range")
-		}
-		sub = subList.Subscriptions[index]
-	} else {
-		if !IsURL(param) {
-			return getCommandPrivate("Argument is not a valid URL or index")
-		}
-		sub, _ = subList.find(param)
-		if sub == nil {
-			return getCommandPrivate("Channel not subscribed")
-		}
-	}
-
-	go func(channelID string, sub *Subscription, subList *SubscriptionList) {
-		p.processSubscription(channelID, sub)
-		err := p.storeSubscriptions(channelID, subList)
-		if err != nil {
-			p.API.LogError(err.Error())
-		}
-	}(args.ChannelId, sub, subList)
-
-	return getCommandResponse("Fetching " + sub.Title)
+	p.processChannel(args.ChannelId)
+	return getCommandResponse("Fetching Feeds in this Channel")
 }
 
 func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model.CommandResponse {
-	hideURLs := p.getConfiguration().HideURLs
-	txt := "### Subscriptions in this channel\n"
 
-	subscriptions, err := p.getSubscriptions(args.ChannelId)
+	hideURLs := p.getConfiguration().HideURLs
+	subs, err := p.getSubscriptions(args.ChannelId)
 	if err != nil {
 		return getCommandPrivate(err.Error())
 	}
 
-	for index, sub := range subscriptions.Subscriptions {
-		if hideURLs {
-			txt += fmt.Sprintf("%d: %s\n", index, sub.Title)
-		} else {
-			txt += fmt.Sprintf("%d: [%s](%s)\n", index, sub.Title, sub.URL)
+	attachments := make([]*model.SlackAttachment, len(subs.Subscriptions))
+
+	for i, sub := range subs.Subscriptions {
+		title := sub.Title
+		if !hideURLs {
+			title = fmt.Sprintf("[%s](%s)", sub.Title, sub.URL)
+		}
+		user, err := p.API.GetUser(sub.UserID)
+		username := "unknown"
+		if err == nil {
+			username = user.Username
+		}
+		attachments[i] = &model.SlackAttachment{
+			Title: title,
+			Text:  fmt.Sprintf("Subscribed by: %s", username),
+			Color: sub.Color,
 		}
 	}
-	return getCommandPrivate(txt)
+
+	grouped, err := p.groupAttachments(attachments)
+
+	if err != nil {
+		return getCommandPrivate(err.Error())
+	}
+
+	for i, group := range grouped {
+		msg := ""
+		if i == 0 {
+			msg = "### Subscriptions:"
+		}
+		post := &model.Post{
+			UserId:    p.botUserID,
+			ChannelId: args.ChannelId,
+			Message:   msg,
+			Props: model.StringInterface{
+				"attachments": group,
+			},
+		}
+
+		p.API.SendEphemeralPost(args.UserId, post)
+	}
+
+	return &model.CommandResponse{}
 }
 
 // thanks to https://stackoverflow.com/a/55551215/8781351

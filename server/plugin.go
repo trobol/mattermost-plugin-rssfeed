@@ -44,25 +44,168 @@ type RSSFeedPlugin struct {
 func (p *RSSFeedPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *http.Request) {
 	switch path := r.URL.Path; path {
 	case "/images/rss.png":
-		data, err := ioutil.ReadFile(string("plugins/rssfeed/assets/rss.png"))
-		if err == nil {
-			w.Header().Set("Content-Type", "image/png")
-			_, writeErr := w.Write(data)
-			if writeErr != nil {
-				p.API.LogError(writeErr.Error())
-			}
-		} else {
-			w.WriteHeader(404)
-			_, writeErr := w.Write([]byte("404 Something went wrong - " + http.StatusText(404)))
-			if writeErr != nil {
-				p.API.LogError(err.Error())
-			}
-			p.API.LogInfo("/images/rss.png err = ", err.Error())
-		}
+		p.handleIcon(w, r)
+	case "/unsub":
+		p.handleHTTPUnsub(w, r)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		http.NotFound(w, r)
 	}
+}
+
+func (p *RSSFeedPlugin) handleIcon(w http.ResponseWriter, r *http.Request) {
+	data, err := ioutil.ReadFile(string("plugins/rssfeed/assets/rss.png"))
+	if err == nil {
+		w.Header().Set("Content-Type", "image/png")
+		_, writeErr := w.Write(data)
+		if writeErr != nil {
+			p.API.LogError(writeErr.Error())
+		}
+	} else {
+		w.WriteHeader(404)
+		_, writeErr := w.Write([]byte("404 Something went wrong - " + http.StatusText(404)))
+		if writeErr != nil {
+			p.API.LogError(err.Error())
+		}
+		p.API.LogInfo("/images/rss.png err = ", err.Error())
+	}
+}
+
+func (p *RSSFeedPlugin) makeSelectPost(channelID string, postID string, selected uint32) *model.Post {
+	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
+
+	subs, err := p.getSubscriptions(channelID)
+
+	if err != nil {
+		return &model.Post{
+			ChannelId: channelID,
+			Message:   "failed to obtain subscriptions",
+		}
+	}
+	options := make([]*model.PostActionOptions, len(subs.Subscriptions))
+	for i, s := range subs.Subscriptions {
+		options[i] = &model.PostActionOptions{
+			Text:  s.Title,
+			Value: strconv.FormatUint(uint64(s.ID), 10),
+		}
+	}
+
+	selectedStr := strconv.FormatUint(uint64(selected), 10)
+
+	url := fmt.Sprintf("%s/plugins/%s/unsub", siteURL, manifest.ID)
+
+	post := &model.Post{
+		ChannelId: channelID,
+		Id:        postID,
+		Props: model.StringInterface{
+			"attachments": []*model.SlackAttachment{{
+				Actions: []*model.PostAction{{
+					Type: model.POST_ACTION_TYPE_SELECT,
+					Name: "Select Subscription",
+					Integration: &model.PostActionIntegration{
+						URL: url,
+						Context: model.StringInterface{
+							"action": "select",
+						},
+					},
+					Options:       options,
+					DefaultOption: selectedStr,
+				}, {
+					Type: model.POST_ACTION_TYPE_BUTTON,
+					Name: "Unsub",
+					Integration: &model.PostActionIntegration{
+						URL: url,
+						Context: model.StringInterface{
+							"action":          "post",
+							"selected_option": selectedStr,
+						},
+					},
+				}},
+			}},
+		},
+	}
+	return post
+}
+
+func (p *RSSFeedPlugin) handleHTTPUnsub(w http.ResponseWriter, r *http.Request) {
+	request := model.PostActionIntegrationRequestFromJson(r.Body)
+
+	if request == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	action, actionOK := request.Context["action"].(string)
+	selectedStr, selectedOK := request.Context["selected_option"].(string)
+
+	if !(actionOK && selectedOK) {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	selected, err := strconv.ParseUint(selectedStr, 10, 32)
+
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	var post *model.Post
+	if action == "select" {
+		post = p.makeSelectPost(request.ChannelId, request.PostId, uint32(selected))
+	} else if action == "post" {
+		var attachment *model.SlackAttachment
+		if selected == 0 {
+			attachment = &model.SlackAttachment{
+				Title: "No changes were made",
+				Color: "#03fc73",
+			}
+		} else {
+			err := p.unsubscribeFromID(request.ChannelId, uint32(selected))
+
+			if err != nil {
+				attachment = &model.SlackAttachment{
+					Title: "Error",
+					Text:  err.Error(),
+					Color: "#03fc73",
+				}
+			} else {
+				attachment = &model.SlackAttachment{
+					Title: "Success",
+					Color: "#03fc73",
+				}
+			}
+
+		}
+
+		post = &model.Post{
+			Id:        request.PostId,
+			ChannelId: request.ChannelId,
+			Props: model.StringInterface{
+				"attachments": []*model.SlackAttachment{
+					attachment,
+				}},
+		}
+
+	} else {
+		post = &model.Post{
+			Id:        request.PostId,
+			ChannelId: request.ChannelId,
+			Props: model.StringInterface{
+				"attachments": []*model.SlackAttachment{{
+					Title: "Invalid Request",
+					Color: "#fc0345",
+				}},
+			},
+		}
+	}
+
+	p.API.UpdateEphemeralPost(request.UserId, post)
+
+	resp := &model.PostActionIntegrationResponse{}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(resp.ToJson())
+
 }
 
 func (p *RSSFeedPlugin) setupHeartBeat() {
@@ -92,29 +235,34 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 			return err
 		}
 		for _, channelID := range channelIDs {
-			list, err := p.getSubscriptions(channelID)
-			if err != nil {
-				return err
-			}
-
-			var wg sync.WaitGroup
-			for _, sub := range list.Subscriptions {
-				wg.Add(1)
-				go func(channelID string, sub *Subscription) {
-					defer wg.Done()
-					p.processSubscription(channelID, sub)
-				}(channelID, sub)
-			}
-			wg.Wait()
-
-			err = p.storeSubscriptions(channelID, list)
-			if err != nil {
-				p.API.LogError(err.Error())
-			}
+			p.processChannel(channelID)
 		}
 	}
 
 	return nil
+}
+
+func (p *RSSFeedPlugin) processChannel(channelID string) {
+	list, err := p.getSubscriptions(channelID)
+	if err != nil {
+		p.API.LogError(err.Error())
+		return
+	}
+
+	var wg sync.WaitGroup
+	for _, sub := range list.Subscriptions {
+		wg.Add(1)
+		go func(channelID string, sub *Subscription) {
+			defer wg.Done()
+			p.processSubscription(channelID, sub)
+		}(channelID, sub)
+	}
+	wg.Wait()
+
+	err = p.storeSubscriptions(channelID, list)
+	if err != nil {
+		p.API.LogError(err.Error())
+	}
 }
 
 func (p *RSSFeedPlugin) getHeartbeatTime() (int, error) {
