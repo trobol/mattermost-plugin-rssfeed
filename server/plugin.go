@@ -71,6 +71,22 @@ func (p *RSSFeedPlugin) handleIcon(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *RSSFeedPlugin) ensureIds(channelID string, subs *SubscriptionList) {
+	updated := false
+	for _, s := range subs.Subscriptions {
+		if s.ID == 0 {
+			updated = true
+			s.ID = makeHash(s.URL)
+		}
+	}
+	if updated {
+		err := p.storeSubscriptions(channelID, subs)
+		if err != nil {
+			return
+		}
+	}
+}
+
 func (p *RSSFeedPlugin) makeUnsubAttachments(channelID string, selected uint32) (*model.SlackAttachment, error) {
 	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
 
@@ -79,6 +95,8 @@ func (p *RSSFeedPlugin) makeUnsubAttachments(channelID string, selected uint32) 
 	if err != nil {
 		return nil, err
 	}
+	p.ensureIds(channelID, subs)
+
 	options := make([]*model.PostActionOptions, len(subs.Subscriptions))
 	for i, s := range subs.Subscriptions {
 		options[i] = &model.PostActionOptions{
@@ -235,12 +253,12 @@ func (p *RSSFeedPlugin) processChannel(channelID string) {
 	}
 
 	var wg sync.WaitGroup
-	for _, sub := range list.Subscriptions {
+	for i, sub := range list.Subscriptions {
 		wg.Add(1)
-		go func(channelID string, sub *Subscription) {
+		go func(channelID string, sub *Subscription, i int) {
 			defer wg.Done()
 			p.processSubscription(channelID, sub)
-		}(channelID, sub)
+		}(channelID, sub, i)
 	}
 	wg.Wait()
 

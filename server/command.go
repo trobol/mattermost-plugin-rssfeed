@@ -24,7 +24,7 @@ func getCommand() *model.Command {
 		DisplayName:      "RSSFeed",
 		Description:      "Allows user to subscribe to an rss feed.",
 		AutoComplete:     true,
-		AutoCompleteDesc: "Available commands: list, subscribe, unsubscribe, help",
+		AutoCompleteDesc: "Available commands: list, sub, unsub, help, fetch",
 		AutoCompleteHint: "[command]",
 	}
 }
