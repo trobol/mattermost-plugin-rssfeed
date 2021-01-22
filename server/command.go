@@ -106,7 +106,8 @@ func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.
 
 	go p.subscribe(context.Background(), param, args.ChannelId, args.UserId)
 
-	return getCommandPrivate(fmt.Sprintf("Attempting to Subscribed to [url](%s)", param))
+	p.createBotPost(fmt.Sprintf("Attempting to Subscribed to [url](%s)", param), args.ChannelId, args.UserId, nil)
+	return &model.CommandResponse{}
 }
 
 func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *model.CommandResponse {
@@ -122,7 +123,8 @@ func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *mode
 
 func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *model.CommandResponse {
 	p.processChannel(args.ChannelId)
-	return getCommandResponse("Fetching Feeds in this Channel")
+	p.createBotPost("Fetching Feeds in this Channel", args.ChannelId, "", nil)
+	return &model.CommandResponse{}
 }
 
 func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model.CommandResponse {
@@ -130,6 +132,11 @@ func (p *RSSFeedPlugin) handleList(param string, args *model.CommandArgs) *model
 	subs, err := p.getSubscriptions(args.ChannelId)
 	if err != nil {
 		return getCommandPrivate(err.Error())
+	}
+
+	if len(subs.Subscriptions) == 0 {
+		p.createBotPost("No subscriptions in this channel", args.ChannelId, args.UserId, nil)
+		return &model.CommandResponse{}
 	}
 
 	attachments := make([]*model.SlackAttachment, len(subs.Subscriptions))

@@ -178,7 +178,7 @@ func (p *RSSFeedPlugin) unsubscribeFromID(channelID string, id uint32) error {
 		return err
 	}
 
-	_, index := subs.findID(id)
+	sub, index := subs.findID(id)
 
 	if index != -1 {
 		subs.remove(index)
@@ -186,7 +186,7 @@ func (p *RSSFeedPlugin) unsubscribeFromID(channelID string, id uint32) error {
 			p.API.LogError(err.Error())
 			return err
 		}
-
+		p.createBotPost(fmt.Sprintf("Unsubscribed from %s", sub.Title), channelID, "", nil)
 		return nil
 	}
 
