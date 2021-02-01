@@ -231,14 +231,16 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 
 	for index := 0; true; index++ {
 		channelIDs, err := p.API.KVList(index, keysPerPage)
-		if len(channelIDs) < keysPerPage {
-			break
-		}
+
 		if err != nil {
 			return err
 		}
 		for _, channelID := range channelIDs {
 			p.processChannel(channelID)
+		}
+
+		if len(channelIDs) < keysPerPage {
+			break
 		}
 	}
 
