@@ -29,16 +29,6 @@ func getCommand() *model.Command {
 	}
 }
 
-func getCommandResponse(text string) *model.CommandResponse {
-	return &model.CommandResponse{
-		ResponseType: model.COMMAND_RESPONSE_TYPE_IN_CHANNEL,
-		Text:         text,
-		Username:     botDisplayName,
-		IconURL:      RSSFeedIconURL,
-		Type:         model.POST_DEFAULT,
-	}
-}
-
 func getCommandPrivate(text string) *model.CommandResponse {
 	return &model.CommandResponse{
 		ResponseType: model.COMMAND_RESPONSE_TYPE_EPHEMERAL,
