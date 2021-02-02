@@ -96,7 +96,7 @@ func (p *RSSFeedPlugin) handleSub(param string, args *model.CommandArgs) *model.
 
 	go p.subscribe(context.Background(), param, args.ChannelId, args.UserId)
 
-	p.createBotPost(fmt.Sprintf("Attempting to Subscribed to [url](%s)", param), args.ChannelId, args.UserId, nil)
+	p.createBotPost(fmt.Sprintf("Attempting to Subscribe to [url](%s)", param), args.ChannelId, args.UserId, nil)
 	return &model.CommandResponse{}
 }
 
