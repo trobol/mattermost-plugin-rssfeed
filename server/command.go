@@ -113,7 +113,7 @@ func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *mode
 
 func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *model.CommandResponse {
 	p.processChannel(args.ChannelId)
-	p.createBotPost("Fetching Feeds in this Channel", args.ChannelId, "", nil)
+	p.createBotPost("Fetching Feeds in this channel", args.ChannelId, "", nil)
 	return &model.CommandResponse{}
 }
 
