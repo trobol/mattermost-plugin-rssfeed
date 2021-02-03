@@ -7,25 +7,20 @@ This plugin allows a user to subscribe a channel to an RSS (Version 2 only) or a
 
 ## Getting Started
 Upload tar.gz to Mattermost using the plugin screen.
-Assign a user under the settings for posting.
-
-To allow for the plugin to override user user name and icon on posts you must enable the feature in your Mattermost system settings:
-
-* <a class="reference external" href="https://docs.mattermost.com/administration/config-settings.html#enable-integrations-to-override-usernames">Enable integrations to override usernames</a> must be set to `true` in `config.json` to override usernames. Enable them from <strong>System Console &gt; Integrations &gt; Custom Integrations</strong> or ask your System Administrator to do so. If not enabled, the username is set to `webhook`.
-* <a class="reference external" href="https://docs.mattermost.com/administration/config-settings.html#enable-integrations-to-override-profile-picture-icons">Enable integrations to override profile picture icons</a> must be set to `true` in `config.json` to override profile picture icons. Enable them from <strong>System Console &gt; Integrations &gt; Custom Integrations</strong> or ask your System Administrator to do so. If not enabled, the icon of the creator of the webhook URL is used to post messages.
 
 To use the plugin, navigate to the channel you want subscribed and use the following commands:
 ```
 /feed help                  // to see the help menu
-/feed subscribe <url>       // to subscribe the channel to an rss feed
-/feed unsubscribe <url>     // to unsubscribe the channel from an rss feed
+/feed sub <url>             // to subscribe the channel to an rss feed
+/feed unsub                 // to unsubscribe the channel from an rss feed
 /feed list                  // to list the feeds the channel is subscribed to
+/feed fetch                 // force update all feeds in channel
 ```
 
 ## Developers
 Clone the repository:
 ```
-git clone https://github.com/wbernest/mattermost-plugin-rssfeed
+git clone https://github.com/trobol/mattermost-plugin-rssfeed
 ```
 
 Build your plugin:
