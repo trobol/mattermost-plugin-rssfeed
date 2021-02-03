@@ -2,7 +2,7 @@
     "id": "rssfeed",
     "name": "RSSFeed",
     "description": "This plugin serves as an rss subscription service for Mattermost.",
-    "version": "0.2.5",
+    "version": "0.2.7",
     "min_server_version": "5.10.0",
     "server": {
         "executables": {
