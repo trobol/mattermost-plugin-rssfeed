@@ -7,5 +7,5 @@ var manifest = struct {
 	Version string
 }{
 	ID:      "rssfeed",
-	Version: "0.2.7",
+	Version: "0.2.8",
 }

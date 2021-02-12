@@ -2,7 +2,7 @@
     "id": "rssfeed",
     "name": "RSSFeed",
     "description": "This plugin serves as an rss subscription service for Mattermost.",
-    "version": "0.2.7",
+    "version": "0.2.8",
     "min_server_version": "5.10.0",
     "server": {
         "executables": {
@@ -27,27 +27,27 @@
                 "display_name": "Show Description in RSS post.",
                 "type": "bool",
                 "help_text": "(Optional) Use this field to hide the description in rss post (Useful if link already returns a valid link back to post).",
-                "default": "true"
+                "default": true
             },
             {
                 "key":"HideURLs",
                 "display_name": "Hide URL from public messages",
                 "type":"bool",
-                "default": "true"
+                "default": true
             },
             {
                 "key": "GroupMessages",
                 "display_name": "Group Messages",
                 "type": "bool",
                 "help_text": "Control whether new items from the same feed will be grouped into one message",
-                "default": "true"
+                "default": true
             },
             {
                 "key": "SortMessages",
                 "display_name": "Sort Messages",
                 "type": "bool",
                 "help_text": "Sort messages by date",
-                "default": "true"
+                "default": true
             },
             {
                 "key": "GravatarDefault",

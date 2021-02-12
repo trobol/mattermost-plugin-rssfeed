@@ -239,7 +239,7 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 			p.processChannel(channelID)
 		}
 
-		if len(channelIDs) < keysPerPage {
+		if len(channelIDs) <= keysPerPage {
 			break
 		}
 	}
