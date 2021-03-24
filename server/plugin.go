@@ -399,12 +399,6 @@ func (p *RSSFeedPlugin) padAttachments(attachments []*model.SlackAttachment) [][
 	return result
 }
 
-func (p *RSSFeedPlugin) createPost(post *model.Post) {
-	if _, err := p.API.CreatePost(post); err != nil {
-		p.API.LogError(err.Error())
-	}
-}
-
 // if userId is provided the post will be ephemeral
 func (p *RSSFeedPlugin) createBotPost(msg string, channelID string, userID string, attachments []*model.SlackAttachment) {
 	post := &model.Post{
@@ -417,11 +411,16 @@ func (p *RSSFeedPlugin) createBotPost(msg string, channelID string, userID strin
 		post.AddProp("attachments", attachments)
 	}
 
-	if userID != "" {
-		post = p.API.SendEphemeralPost(userID, post)
-	}
 
-	p.createPost(post)
+	if userID != "" {
+		_ = p.API.SendEphemeralPost(userID, post)
+	} else {
+		_, err := p.API.CreatePost(post)
+		if err != nil {
+			p.API.LogError(err.Error())
+		}
+	}
+	
 }
 
 func getGravatarIcon(email string, defaultIcon string) string {
