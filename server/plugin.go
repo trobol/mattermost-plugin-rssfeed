@@ -227,6 +227,7 @@ func (p *RSSFeedPlugin) setupHeartBeat() {
 }
 
 func (p *RSSFeedPlugin) processHeartBeat() error {
+	p.API.LogDebug("processing heartbeat")
 	const keysPerPage = 50
 
 	for index := 0; true; index++ {
@@ -239,7 +240,7 @@ func (p *RSSFeedPlugin) processHeartBeat() error {
 			p.processChannel(channelID)
 		}
 
-		if len(channelIDs) <= keysPerPage {
+		if len(channelIDs) < keysPerPage {
 			break
 		}
 	}
@@ -411,7 +412,6 @@ func (p *RSSFeedPlugin) createBotPost(msg string, channelID string, userID strin
 		post.AddProp("attachments", attachments)
 	}
 
-
 	if userID != "" {
 		_ = p.API.SendEphemeralPost(userID, post)
 	} else {
@@ -420,7 +420,6 @@ func (p *RSSFeedPlugin) createBotPost(msg string, channelID string, userID strin
 			p.API.LogError(err.Error())
 		}
 	}
-	
 }
 
 func getGravatarIcon(email string, defaultIcon string) string {
