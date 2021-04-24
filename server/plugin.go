@@ -47,10 +47,18 @@ func (p *RSSFeedPlugin) ServeHTTP(c *plugin.Context, w http.ResponseWriter, r *h
 		p.handleIcon(w, r)
 	case "/unsub":
 		p.handleHTTPUnsub(w, r)
+	case "/fetch":
+		p.handleHTTPFetch(w, r)
 	default:
 		w.Header().Set("Content-Type", "application/json")
 		http.NotFound(w, r)
 	}
+}
+
+func (p *RSSFeedPlugin) getURL() string {
+	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
+
+	return fmt.Sprintf("%s/plugins/%s", siteURL, manifest.ID)
 }
 
 func (p *RSSFeedPlugin) handleIcon(w http.ResponseWriter, r *http.Request) {
@@ -71,6 +79,20 @@ func (p *RSSFeedPlugin) handleIcon(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (p *RSSFeedPlugin) handleHTTPFetch(w http.ResponseWriter, r *http.Request) {
+	params := r.URL.Query()
+
+	channelID, hasChannel := params["channel"]
+	if !hasChannel {
+		http.Error(w, "channel is required", http.StatusBadRequest)
+		return
+	}
+
+	fmt.Fprintf(w, "OK")
+	// FIXME: this will fail silently
+	p.processChannel(channelID[0])
+}
+
 func (p *RSSFeedPlugin) ensureIds(channelID string, subs *SubscriptionList) {
 	updated := false
 	for _, s := range subs.Subscriptions {
@@ -88,8 +110,6 @@ func (p *RSSFeedPlugin) ensureIds(channelID string, subs *SubscriptionList) {
 }
 
 func (p *RSSFeedPlugin) makeUnsubAttachments(channelID string, selected uint32) (*model.SlackAttachment, error) {
-	siteURL := *p.API.GetConfig().ServiceSettings.SiteURL
-
 	subs, err := p.getSubscriptions(channelID)
 
 	if err != nil {
@@ -107,7 +127,7 @@ func (p *RSSFeedPlugin) makeUnsubAttachments(channelID string, selected uint32) 
 
 	selectedStr := strconv.FormatUint(uint64(selected), 10)
 
-	url := fmt.Sprintf("%s/plugins/%s/unsub", siteURL, manifest.ID)
+	url := p.getURL() + "/unsub"
 
 	attachment := &model.SlackAttachment{
 		Actions: []*model.PostAction{{

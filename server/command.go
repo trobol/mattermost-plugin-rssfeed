@@ -112,8 +112,10 @@ func (p *RSSFeedPlugin) handleUnsub(param string, args *model.CommandArgs) *mode
 }
 
 func (p *RSSFeedPlugin) handleFetch(param string, args *model.CommandArgs) *model.CommandResponse {
+	fetchURL := p.getURL() + "/fetch?channel=" + args.ChannelId
+	message := "Fetching Feeds in this channel, you can also trigger a fetch with: " + fetchURL
+	p.createBotPost(message, args.ChannelId, "", nil)
 	p.processChannel(args.ChannelId)
-	p.createBotPost("Fetching Feeds in this channel", args.ChannelId, "", nil)
 	return &model.CommandResponse{}
 }
 
